@@ -1,2 +1,6 @@
+Examples/
+.*.swo
+.*.swp
+*.idr~
 *.ibc
 *.o

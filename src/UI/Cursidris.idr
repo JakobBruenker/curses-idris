@@ -130,8 +130,8 @@ initScr = mkForeign (FFun "init_screen" [] FPtr)
 
 ||| Start it all up
 abstract
-initCurses : IO () -> IO ()
-initCurses fn = do
+initCurses : IO ()
+initCurses = do
   initScr
   b <- hasColors
   when b $ startColor $> useDefaultColors
@@ -155,7 +155,7 @@ refresh : IO ()
 refresh = mkForeign (FFun "refresh" [] FUnit)
 
 public
-data IntPair = MkIntPair Int
+data Pair = MkPair Int
 
 public
 data Color = MkColor Int
@@ -199,8 +199,8 @@ color _         = MkColor 8
 ||| >    between  0  and  COLORS (the 0 color pair is wired to
 ||| >    white on black and cannot be changed).
 abstract
-initIntPair : IntPair -> Color -> Color -> IO ()
-initIntPair (MkIntPair p) (MkColor f) (MkColor b) =
+initPair : Pair -> Color -> Color -> IO ()
+initPair (MkPair p) (MkColor f) (MkColor b) =
   mkForeign (FFun "init_pair" [FInt, FInt, FInt] FUnit) p f b
 
 public
@@ -210,8 +210,8 @@ colorPair : Int -> IO Int
 colorPair x = mkForeign (FFun "get_color_pair" [FInt] FInt) x
 
 abstract
-attrSet : Attr -> IntPair -> IO ()
-attrSet (MkAttr attr) (MkIntPair p) = do
+attrSet : Attr -> Pair -> IO ()
+attrSet (MkAttr attr) (MkPair p) = do
   pair <- colorPair p
   mkForeign (FFun "attrset" [FInt] FUnit) (prim__orInt attr pair)
 
@@ -237,8 +237,8 @@ attrPlus : Attr -> Attr -> Attr
 attrPlus (MkAttr a) (MkAttr b) = MkAttr $ prim__orInt a b
 
 abstract
-bkgrndSet : Attr -> IntPair -> IO ()
-bkgrndSet (MkAttr a) (MkIntPair p) = colorPair p >>= \pair => 
+bkgrndSet : Attr -> Pair -> IO ()
+bkgrndSet (MkAttr a) (MkPair p) = colorPair p >>= \pair => 
   bkgdset (prim__orInt (ord ' ') (prim__orInt ored pair))
   where
     bkgdset : Int -> IO ()
