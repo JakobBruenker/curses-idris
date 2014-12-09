@@ -1,47 +1,116 @@
 module Cursidris
 
+%include C "curses.h"
 %access private
-
-||| Start it all up
-abstract
-initCurses : IO () -> IO ()
-initCurses x = ?initCurses_rhs
-
-||| A bunch of settings we need
-abstract
-resetParams : IO ()
-resetParams = ?resetParams_rhs
-
-||| Throw error if result of given action yields true
-|||
-||| Execute an IO action, throwing a userError if the predicate yields True when
-||| applied to the result returned by the IO action. If no exception is raised, 
-||| return the result of the computation. 
-throwIf : (a -> Bool) -> (a -> String) -> IO a -> IO a
-throwIf f x x1 = ?throwIf_rhs
-
-||| Arbitrary test
-throwIfErr : Num a => (a -> String) -> IO a -> IO a
-throwIfErr x x1 = ?throwIfErr_rhs
-
-||| Discard result
-abstract
-throwIfErr_ : Num a => (a -> String) -> IO a -> IO ()
-throwIfErr_ f x = ?throwIfErr__rhs
-
-||| Throw error if given Pointer is a Nullpointer
-throwIfNull : String -> IO Ptr -> IO Ptr
-throwIfNull x x1 = ?throwIfNull_rhs
 
 ||| A window
 abstract
 Window : Type
 Window = Ptr
 
+cBool : Bool -> Int
+cBool True  = 1
+cBool False = 0
+
+idrBool : Int -> Bool
+idrBool = (/= 0)
+
+||| > The nodelay option causes getch to be a non-blocking call.
+||| > If  no input is ready, getch returns ERR.  If disabled (bf
+||| > is FALSE), getch waits until a key is pressed.
+noDelay : Window -> Bool -> IO ()
+noDelay win bf = mkForeign (FFun "nodelay" [FPtr, FInt] FUnit) win (cBool bf)
+
+||| Enable the keypad of the user's terminal
+abstract
+keypad : Window -> Bool -> IO ()
+keypad win bf = mkForeign (FFun "keypad" [FPtr, FInt] FUnit) win (cBool bf)
+
 ||| The standard screen
 abstract
-stdScr : Window
-stdScr = ?stdScr_rhs
+stdScr : IO Window
+stdScr = mkForeign (FFun "static &stdscr" [] FPtr)
+
+meta : Window -> Bool -> IO ()
+meta win bf = mkForeign (FFun "meta" [FPtr, FInt] FUnit) win (cBool bf)
+
+||| > Normally, the hardware cursor is left at the  location  of
+||| > the  window  cursor  being  refreshed.  The leaveok option
+||| > allows the cursor to be left wherever the  update  happens
+||| > to leave it.  It is useful for applications where the cur-
+||| > sor is not used, since it  reduces  the  need  for  cursor
+||| > motions.   If  possible, the cursor is made invisible when
+||| > this option is enabled.
+leaveOk : Bool -> IO Int
+leaveOk bf = mkForeign (FFun "leaveok" [FInt] FInt) (cBool bf)
+
+||| > The  nl  and  nonl routines control whether the underlying
+||| > display device translates the return key into  newline  on
+||| > input,  and  whether it translates newline into return and
+||| > line-feed on output (in either case, the call  addch('\n')
+||| > does the equivalent of return and line feed on the virtual
+||| > screen).  Initially, these translations do occur.  If  you
+||| > disable  them using nonl, curses will be able to make bet-
+||| > ter use of the line-feed capability, resulting  in  faster
+||| > cursor  motion.   Also, curses will then be able to detect
+||| > the return key.
+nl : Bool -> IO ()
+nl True  = mkForeign (FFun "nl"   [] FUnit)
+nl False = mkForeign (FFun "nonl" [] FUnit)
+
+||| > The  echo  and  noecho routines control whether characters
+||| > typed by the user are echoed by getch as they  are  typed.
+||| > Echoing  by  the  tty  driver is always disabled, but ini-
+||| > tially getch is in echo  mode,  so  characters  typed  are
+||| > echoed.  Authors of most interactive programs prefer to do
+||| > their own echoing in a controlled area of the  screen,  or
+||| > not  to  echo  at  all, so they disable echoing by calling
+||| > noecho.  [See curs_getch(3) for a discussion of how  these
+||| > routines interact with cbreak and nocbreak.]
+echo : Bool -> IO ()
+echo False = mkForeign (FFun "noecho" [] FUnit)
+echo True  = mkForeign (FFun "echo"   [] FUnit)
+
+||| > The cbreak routine
+||| > disables line buffering and erase/kill  character-process-
+||| > ing  (interrupt  and  flow  control  characters  are unaf-
+||| > fected), making characters typed by the  user  immediately
+||| > available  to  the  program.  The nocbreak routine returns
+||| > the terminal to normal (cooked) mode.
+cBreak : Bool -> IO ()
+cBreak True  = mkForeign (FFun "cbreak"   [] FUnit)
+cBreak False = mkForeign (FFun "nocbreak" [] FUnit)
+
+||| A bunch of settings we need
+abstract
+resetParams : IO ()
+resetParams = do
+  cBreak True
+  echo False
+  nl True
+  leaveOk True
+  scr <- stdScr
+  meta scr True
+  keypad scr True
+  noDelay scr False
+  return ()
+
+||| The use_default_colors() and assume_default_colors() func-
+|||  tions are extensions to the curses library.  They are used
+|||  with terminals that support ISO 6429 color, or equivalent.
+|||
+||| use_default_colors() tells the  curses library  to  assign terminal
+||| default foreground/background colors to color number  -1.
+useDefaultColors : IO ()
+useDefaultColors = return ()
+
+||| Initialise the color settings, also sets the screen on the default
+||| colors (white on black)
+startColor : IO ()
+startColor = mkForeign (FFun "start_color" [] FUnit)
+
+hasColors : IO Bool
+hasColors = map idrBool (mkForeign (FFun "has_colors" [] FInt))
 
 ||| initscr is normally the first curses routine to call when
 ||| initializing a program. curs_initscr(3):
@@ -57,105 +126,51 @@ stdScr = ?stdScr_rhs
 ||| > standard error and exits; otherwise, a pointer is returned
 ||| > to stdscr
 initScr : IO Window
-initScr = ?initScr_rhs
+initScr = mkForeign (FFun "init_screen" [] FPtr)
 
-||| > The cbreak routine
-||| > disables line buffering and erase/kill  character-process-
-||| > ing  (interrupt  and  flow  control  characters  are unaf-
-||| > fected), making characters typed by the  user  immediately
-||| > available  to  the  program.  The nocbreak routine returns
-||| > the terminal to normal (cooked) mode.
-cBreak : Bool -> IO ()
-cBreak x = ?cBreak_rhs
-
-||| > The  echo  and  noecho routines control whether characters
-||| > typed by the user are echoed by getch as they  are  typed.
-||| > Echoing  by  the  tty  driver is always disabled, but ini-
-||| > tially getch is in echo  mode,  so  characters  typed  are
-||| > echoed.  Authors of most interactive programs prefer to do
-||| > their own echoing in a controlled area of the  screen,  or
-||| > not  to  echo  at  all, so they disable echoing by calling
-||| > noecho.  [See curs_getch(3) for a discussion of how  these
-||| > routines interact with cbreak and nocbreak.]
-echo : Bool -> IO ()
-echo x = ?echo_rhs
-
-||| > The  nl  and  nonl routines control whether the underlying
-||| > display device translates the return key into  newline  on
-||| > input,  and  whether it translates newline into return and
-||| > line-feed on output (in either case, the call  addch('\n')
-||| > does the equivalent of return and line feed on the virtual
-||| > screen).  Initially, these translations do occur.  If  you
-||| > disable  them using nonl, curses will be able to make bet-
-||| > ter use of the line-feed capability, resulting  in  faster
-||| > cursor  motion.   Also, curses will then be able to detect
-||| > the return key.
-nl : Bool -> IO ()
-nl x = ?nl_rhs
-
-||| Enable the keypad of the user's terminal
+||| Start it all up
 abstract
-keypad : Window -> Bool -> IO ()
-keypad x x1 = ?keypad_rhs
-
-||| > The nodelay option causes getch to be a non-blocking call.
-||| > If  no input is ready, getch returns ERR.  If disabled (bf
-||| > is FALSE), getch waits until a key is pressed.
-noDelay : Window -> Bool -> IO ()
-noDelay x x1 = ?noDelay_rhs
-
-||| > Normally, the hardware cursor is left at the  location  of
-||| > the  window  cursor  being  refreshed.  The leaveok option
-||| > allows the cursor to be left wherever the  update  happens
-||| > to leave it.  It is useful for applications where the cur-
-||| > sor is not used, since it  reduces  the  need  for  cursor
-||| > motions.   If  possible, the cursor is made invisible when
-||| > this option is enabled.
-leaveOk : Bool -> IO Int
-leaveOk x = ?leaveOk_rhs
-
-||| The use_default_colors() and assume_default_colors() func-
-|||  tions are extensions to the curses library.  They are used
-|||  with terminals that support ISO 6429 color, or equivalent.
-|||
-||| use_default_colors() tells the  curses library  to  assign terminal
-||| default foreground/background colors to color number  -1.
-useDefaultColors : IO ()
-useDefaultColors = return ()
+initCurses : IO () -> IO ()
+initCurses fn = do
+  initScr
+  b <- hasColors
+  when b $ startColor $> useDefaultColors
+  resetParams
 
 ||| > The program must call endwin for each terminal being used before
 ||| > exiting from curses.
 abstract
 endWin : IO ()
-endWin = ?endWin_rhs
+endWin = mkForeign (FFun "endwin" [] FUnit)
 
 ||| get the dimensions of the screen
 abstract
 scrSize : IO (Int, Int)
-scrSize = ?scrSize_rhs
+scrSize = [| MkPair (mkForeign (FFun "LINES" [] FInt))
+                    (mkForeign (FFun "COLS"  [] FInt)) |]
 
 ||| refresh curses windows and lines. curs_refresh(3)
 abstract
 refresh : IO ()
-refresh = ?refresh_rhs
-
-hasColors : IO Bool
-hasColors = ?hasColors_rhs
-
-||| Initialise the color settings, also sets the screen on the default
-||| colors (white on black)
-startColor : IO ()
-startColor = ?startColor_rhs
+refresh = mkForeign (FFun "refresh" [] FUnit)
 
 public
-data IntPair = CIntPair  Int
+data IntPair = MkIntPair Int
 
 public
-data Color   = CColor    Int
+data Color = MkColor Int
 
 abstract
-color : String -> Maybe Color
-color x = ?color_rhs
+color : String -> Color
+color "black"   = MkColor 0
+color "red"     = MkColor 1
+color "green"   = MkColor 2
+color "yellow"  = MkColor 3
+color "blue"    = MkColor 4
+color "magenta" = MkColor 5
+color "cyan"    = MkColor 6
+color "white"   = MkColor 7
+color _         = MkColor 8
 
 ||| > curses support color attributes  on  terminals  with  that
 ||| > capability.   To  use  these  routines start_color must be
@@ -185,46 +200,69 @@ color x = ?color_rhs
 ||| >    white on black and cannot be changed).
 abstract
 initIntPair : IntPair -> Color -> Color -> IO ()
-initIntPair x x1 x2 = ?initIntPair_rhs
+initIntPair (MkIntPair p) (MkColor f) (MkColor b) =
+  mkForeign (FFun "init_pair" [FInt, FInt, FInt] FUnit) p f b
 
 public
-data Attr = CAttr Int
+data Attr = MkAttr Int
+
+colorPair : Int -> IO Int
+colorPair x = mkForeign (FFun "get_color_pair" [FInt] FInt) x
 
 abstract
 attrSet : Attr -> IntPair -> IO ()
-attrSet x x1 = ?attrSet_rhs
+attrSet (MkAttr attr) (MkIntPair p) = do
+  pair <- colorPair p
+  mkForeign (FFun "attrset" [FInt] FUnit) (prim__orInt attr pair)
 
 abstract
 attr0 : Attr
-attr0 = ?attr0_rhs
-
-abstract
-setBold : Attr -> Bool -> Attr
-setBold x x1 = ?setBold_rhs
-
-abstract
-setReverse : Attr -> Bool -> Attr
-setReverse x x1 = ?setReverse_rhs
+attr0 = MkAttr 0
 
 ||| bitwise combination of attributes
 setAttr : Attr -> Attr -> Bool -> Attr
-setAttr x x1 x2 = ?setAttr_rhs
+setAttr (MkAttr b) (MkAttr a) False = MkAttr $ prim__andInt a $ prim__complInt b
+setAttr (MkAttr b) (MkAttr a) True  = MkAttr $ prim__orInt  a b
+
+abstract
+setBold : Attr -> Bool -> Attr
+setBold = setAttr $ MkAttr 2097152
+
+abstract
+setReverse : Attr -> Bool -> Attr
+setReverse = setAttr $ MkAttr 262144
 
 abstract
 attrPlus : Attr -> Attr -> Attr
-attrPlus x x1 = ?attrPlus_rhs
+attrPlus (MkAttr a) (MkAttr b) = MkAttr $ prim__orInt a b
 
 abstract
 bkgrndSet : Attr -> IntPair -> IO ()
-bkgrndSet x x1 = ?bkgrndSet_rhs
+bkgrndSet (MkAttr a) (MkIntPair p) = colorPair p >>= \pair => 
+  bkgdset (prim__orInt (ord ' ') (prim__orInt ored pair))
+  where
+    bkgdset : Int -> IO ()
+    bkgdset x = mkForeign (FFun "bkgdset" [FInt] FUnit) x
+    testZero : Int -> Int
+    testZero x = if prim__andInt a x /= 0 then x else 0
+    ored = foldr1 prim__orInt (map testZero (the (List Int) [4194304
+                                                            ,524288
+                                                            ,2097152
+                                                            ,1048576
+                                                            ,8388608
+                                                            ,16777216
+                                                            ,262144
+                                                            ,65536
+                                                            ,131072
+                                                            ]))
 
 abstract
 waddnstr : Window -> String -> Int -> IO Int
-waddnstr x x1 x2 = ?waddnstr_rhs
+waddnstr w s x = mkForeign (FFun "waddnstr" [FPtr, FString, FInt] FInt) w s x
 
 abstract
 clrToEol : IO ()
-clrToEol = ?clrToEol_rhs
+clrToEol = mkForeign (FFun "clrtoeol" [] FUnit)
 
 ||| >    move the cursor associated with the window
 ||| >    to line y and column x.  This routine does  not  move  the
@@ -233,10 +271,10 @@ clrToEol = ?clrToEol_rhs
 ||| >    corner of the window, which is (0,0).
 abstract
 wMove : Window -> Int -> Int -> IO ()
-wMove x x1 x2 = ?wMove_rhs
+wMove win y x = mkForeign (FFun "wmove" [FPtr, FInt, FInt] FUnit) win y x
 
-public
-data CursorVisibility = CursorInvisible | CursorVisible | CursorVeryVisible
+curs_set : Int -> IO Int
+curs_set x = mkForeign (FFun "curs_set" [FInt] FInt) x
 
 ||| Set the cursor state
 |||
@@ -247,29 +285,19 @@ data CursorVisibility = CursorInvisible | CursorVisible | CursorVeryVisible
 ||| >       returned; otherwise, ERR is returned.
 abstract
 cursSet : Int -> IO Int
-cursSet x = ?cursSet_rhs
+cursSet 0 = leaveOk True  $> curs_set 0
+cursSet x = leaveOk False $> curs_set x
 
 ||| Get the current cursor coordinates
 abstract
 getYX : Window -> IO (Int, Int)
-getYX x = ?getYX_rhs
-
-||| Get the current cursor coords, written into the two argument ints.
-|||
-||| >    The getyx macro places the current cursor position of the given
-||| >    window in the two integer variables y and x.
-|||
-||| >    void getyx(WINDOW *win, int y, int x);
-nomacro_gityx : Window -> Ptr -> Ptr -> IO ()
-nomacro_gityx = ?nomacro_gityx_rhs
+getYX win = [| MkPair (mkForeign (FFun "getY" [FPtr] FInt) win) --TODO: write C
+                      (mkForeign (FFun "getX" [FPtr] FInt) win) |] -- function
 
 ||| >      The getch, wgetch, mvgetch and mvwgetch, routines read a
 ||| >      character  from the window.
 getch : IO Int
-getch = ?getch_rhs
-
-||| Map keys to real chars. The lexer will like this.
-decodeKey : Int -> Char
+getch = mkForeign (FFun "getch" [] FInt)
 
 -- Some constants for easy symbolic manipulation.
 -- NB we don't map keys to an abstract type anymore, as we can't use
@@ -277,46 +305,43 @@ decodeKey : Int -> Char
 
 abstract
 keyDown : Char
-keyDown = ?keyDown_rhs
+keyDown = chr 258
 
 abstract
 keyUp : Char
-keyUp = ?keyUp_rhs
+keyUp = chr 259
 
 abstract
 keyLeft : Char
-keyLeft = ?keyLeft_rhs
+keyLeft = chr 260
 
 abstract
 keyRight : Char
-keyRight = ?keyRight_rhs
+keyRight = chr 261
 
 abstract
 keyHome : Char
-keyHome = ?keyHome_rhs
+keyHome = chr 262
 
 abstract
 keyBackspace : Char
-keyBackspace = ?keyBackspace_rhs
+keyBackspace = chr 263
 
 abstract
 keyNPage : Char
-keyNPage = ?keyNPage_rhs
+keyNPage = chr 338
 
 abstract
 keyPPage : Char
-keyPPage = ?keyPPage_rhs
+keyPPage = chr 339
 
 abstract
 keyEnd : Char
-keyEnd = ?keyEnd_rhs
+keyEnd = chr 360
 
 abstract
 keyResize : Char
-keyResize = ?keyResize_rhs
-
-meta : Window -> Bool -> IO ()
-meta x x1 = ?meta_rhs
+keyResize = chr 410
 
 ||| read a character from the window
 |||
@@ -325,11 +350,13 @@ meta x x1 = ?meta_rhs
 ||| pressed. wtimeout, nodelay and timeout don't appear to change this
 ||| behaviour.
 |||
-||| On emacs, we really would want Alt to be our meta key, I think.
-|||
 ||| Be warned, getCh will block the whole process without noDelay
 abstract
 getCh : IO Char
-getCh = ?getCh_rhs
+getCh = do
+  v <- getch
+  case v of
+    (-1) => getCh
+    x    => return $ chr x
 
 -- XXX Do we need this? cursesSigWinch : Signal
