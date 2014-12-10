@@ -1,6 +1,10 @@
 module Cursidris
 
-%include C "curses.h"
+%include C "ncurses.h"
+%include C "cursesrun.h"
+%link C "cursesrun.o"
+%lib C "ncurses"
+
 %access private
 
 ||| A window
@@ -29,7 +33,7 @@ keypad win bf = mkForeign (FFun "keypad" [FPtr, FInt] FUnit) win (cBool bf)
 ||| The standard screen
 abstract
 stdScr : IO Window
-stdScr = mkForeign (FFun "static &stdscr" [] FPtr)
+stdScr = mkForeign (FFun "stdScr" [] FPtr)
 
 meta : Window -> Bool -> IO ()
 meta win bf = mkForeign (FFun "meta" [FPtr, FInt] FUnit) win (cBool bf)
@@ -42,7 +46,9 @@ meta win bf = mkForeign (FFun "meta" [FPtr, FInt] FUnit) win (cBool bf)
 ||| > motions.   If  possible, the cursor is made invisible when
 ||| > this option is enabled.
 leaveOk : Bool -> IO Int
-leaveOk bf = mkForeign (FFun "leaveok" [FInt] FInt) (cBool bf)
+leaveOk bf = do
+  scr <- stdScr
+  mkForeign (FFun "leaveok" [FPtr, FInt] FInt) scr (cBool bf)
 
 ||| > The  nl  and  nonl routines control whether the underlying
 ||| > display device translates the return key into  newline  on
@@ -125,8 +131,9 @@ hasColors = map idrBool (mkForeign (FFun "has_colors" [] FInt))
 ||| > occur, initscr writes  an  appropriate  error  message  to
 ||| > standard error and exits; otherwise, a pointer is returned
 ||| > to stdscr
+abstract
 initScr : IO Window
-initScr = mkForeign (FFun "init_screen" [] FPtr)
+initScr = mkForeign (FFun "initscr" [] FPtr)
 
 ||| Start it all up
 abstract
@@ -146,8 +153,8 @@ endWin = mkForeign (FFun "endwin" [] FUnit)
 ||| get the dimensions of the screen
 abstract
 scrSize : IO (Int, Int)
-scrSize = [| MkPair (mkForeign (FFun "LINES" [] FInt))
-                    (mkForeign (FFun "COLS"  [] FInt)) |]
+scrSize = [| MkPair (mkForeign (FFun "getLines" [] FInt))
+                    (mkForeign (FFun "getCols"  [] FInt)) |]
 
 ||| refresh curses windows and lines. curs_refresh(3)
 abstract
@@ -245,20 +252,30 @@ bkgrndSet (MkAttr a) (MkPair p) = colorPair p >>= \pair =>
     bkgdset x = mkForeign (FFun "bkgdset" [FInt] FUnit) x
     testZero : Int -> Int
     testZero x = if prim__andInt a x /= 0 then x else 0
-    ored = foldr1 prim__orInt (map testZero (the (List Int) [4194304
-                                                            ,524288
-                                                            ,2097152
-                                                            ,1048576
-                                                            ,8388608
-                                                            ,16777216
-                                                            ,262144
-                                                            ,65536
-                                                            ,131072
-                                                            ]))
+    ored = foldr1 prim__orInt (map testZero (with List [4194304
+                                                       ,524288
+                                                       ,2097152
+                                                       ,1048576
+                                                       ,8388608
+                                                       ,16777216
+                                                       ,262144
+                                                       ,65536
+                                                       ,131072
+                                                       ]))
+
+||| Write a String to a Window at current cursor position. The cursor will
+||| be advanced after writing.
+||| @win      The Window that will be written on
+||| @s        The String that will be written
+||| @maxC     If this is a non-negative number, it specifies the maximum number
+|||             of characters that will be printed
+abstract
+waddnstr : (win : Window) -> (s : String) -> (maxC : Int) -> IO Int
+waddnstr w s x = mkForeign (FFun "waddnstr" [FPtr, FString, FInt] FInt) w s x
 
 abstract
-waddnstr : Window -> String -> Int -> IO Int
-waddnstr w s x = mkForeign (FFun "waddnstr" [FPtr, FString, FInt] FInt) w s x
+waddstr : Window -> String -> IO Int
+waddstr win s = waddnstr win s (-1)
 
 abstract
 clrToEol : IO ()
@@ -291,8 +308,8 @@ cursSet x = leaveOk False $> curs_set x
 ||| Get the current cursor coordinates
 abstract
 getYX : Window -> IO (Int, Int)
-getYX win = [| MkPair (mkForeign (FFun "getY" [FPtr] FInt) win) --TODO: write C
-                      (mkForeign (FFun "getX" [FPtr] FInt) win) |] -- function
+getYX win = [| MkPair (mkForeign (FFun "getY" [FPtr] FInt) win)
+                      (mkForeign (FFun "getX" [FPtr] FInt) win) |]
 
 ||| >      The getch, wgetch, mvgetch and mvwgetch, routines read a
 ||| >      character  from the window.
