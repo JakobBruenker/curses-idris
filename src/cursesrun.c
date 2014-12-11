@@ -1,4 +1,4 @@
-#include <ncurses.h>
+#include "cursesrun.h"
 
 WINDOW * stdScr()
 {

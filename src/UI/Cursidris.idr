@@ -7,10 +7,21 @@ module Cursidris
 
 %access private
 
-||| A window
-abstract
-Window : Type
-Window = Ptr
+||| A window, also referred to as a screen.
+data Window = MkWindow Ptr
+
+||| Some functions either return a value or Err
+public
+data ReturnValue a = Val a | Err
+
+||| Use this for setGetChMode
+public
+data GetChMode : Type where
+  WaitForever           : GetChMode
+  WaitForeverRaw        : GetChMode
+  Wait                  : (k : Nat) -> GetChMode
+  WaitForeverLinebuf    : GetChMode
+  WaitForeverLinebufRaw : GetChMode
 
 cBool : Bool -> Int
 cBool True  = 1
@@ -19,24 +30,36 @@ cBool False = 0
 idrBool : Int -> Bool
 idrBool = (/= 0)
 
+||| The standard screen
+stdScr : IO Window
+stdScr = map MkWindow $ mkForeign (FFun "stdScr" [] FPtr)
+
 ||| > The nodelay option causes getch to be a non-blocking call.
 ||| > If  no input is ready, getch returns ERR.  If disabled (bf
 ||| > is FALSE), getch waits until a key is pressed.
-noDelay : Window -> Bool -> IO ()
-noDelay win bf = mkForeign (FFun "nodelay" [FPtr, FInt] FUnit) win (cBool bf)
-
-||| Enable the keypad of the user's terminal
 abstract
-keypad : Window -> Bool -> IO ()
-keypad win bf = mkForeign (FFun "keypad" [FPtr, FInt] FUnit) win (cBool bf)
+noDelay : Bool -> IO ()
+noDelay bf = do
+  (MkWindow scr) <- stdScr
+  mkForeign (FFun "nodelay" [FPtr, FInt] FUnit) scr (cBool bf)
 
-||| The standard screen
 abstract
-stdScr : IO Window
-stdScr = mkForeign (FFun "stdScr" [] FPtr)
+halfDelay : Int -> IO ()
+halfDelay delay = mkForeign (FFun "halfdelay" [FInt] FUnit) delay
 
-meta : Window -> Bool -> IO ()
-meta win bf = mkForeign (FFun "meta" [FPtr, FInt] FUnit) win (cBool bf)
+||| Enables or disables the reading of function keys, arrow keys, and so
+||| on.
+||| @bf  if `True`, enables reading, if `False`, disables it
+abstract
+keypad : (bf : Bool) -> IO ()
+keypad bf = do
+  (MkWindow scr) <- stdScr
+  mkForeign (FFun "keypad" [FPtr, FInt] FUnit) scr (cBool bf)
+
+meta : Bool -> IO ()
+meta bf = do
+  (MkWindow scr) <- stdScr
+  mkForeign (FFun "meta" [FPtr, FInt] FUnit) scr (cBool bf)
 
 ||| > Normally, the hardware cursor is left at the  location  of
 ||| > the  window  cursor  being  refreshed.  The leaveok option
@@ -47,7 +70,7 @@ meta win bf = mkForeign (FFun "meta" [FPtr, FInt] FUnit) win (cBool bf)
 ||| > this option is enabled.
 leaveOk : Bool -> IO Int
 leaveOk bf = do
-  scr <- stdScr
+  (MkWindow scr) <- stdScr
   mkForeign (FFun "leaveok" [FPtr, FInt] FInt) scr (cBool bf)
 
 ||| > The  nl  and  nonl routines control whether the underlying
@@ -73,6 +96,7 @@ nl False = mkForeign (FFun "nonl" [] FUnit)
 ||| > not  to  echo  at  all, so they disable echoing by calling
 ||| > noecho.  [See curs_getch(3) for a discussion of how  these
 ||| > routines interact with cbreak and nocbreak.]
+abstract
 echo : Bool -> IO ()
 echo False = mkForeign (FFun "noecho" [] FUnit)
 echo True  = mkForeign (FFun "echo"   [] FUnit)
@@ -83,9 +107,14 @@ echo True  = mkForeign (FFun "echo"   [] FUnit)
 ||| > fected), making characters typed by the  user  immediately
 ||| > available  to  the  program.  The nocbreak routine returns
 ||| > the terminal to normal (cooked) mode.
+abstract
 cBreak : Bool -> IO ()
 cBreak True  = mkForeign (FFun "cbreak"   [] FUnit)
 cBreak False = mkForeign (FFun "nocbreak" [] FUnit)
+
+raw : Bool -> IO ()
+raw True  = mkForeign (FFun "raw"   [] FUnit)
+raw False = mkForeign (FFun "noraw" [] FUnit)
 
 ||| A bunch of settings we need
 abstract
@@ -95,10 +124,9 @@ resetParams = do
   echo False
   nl True
   leaveOk True
-  scr <- stdScr
-  meta scr True
-  keypad scr True
-  noDelay scr False
+  meta True
+  keypad True
+  noDelay False
   return ()
 
 ||| The use_default_colors() and assume_default_colors() func-
@@ -118,31 +146,17 @@ startColor = mkForeign (FFun "start_color" [] FUnit)
 hasColors : IO Bool
 hasColors = map idrBool (mkForeign (FFun "has_colors" [] FInt))
 
-||| initscr is normally the first curses routine to call when
-||| initializing a program. curs_initscr(3):
-|||
-||| > To initialize the routines, the routine initscr or newterm
-||| > must be called before any of the other routines that  deal
-||| > with  windows  and  screens  are used.
-|||
-||| > The initscr code determines the terminal type and initial-
-||| > izes all curses data structures.  initscr also causes  the
-||| > first  call  to  refresh  to  clear the screen.  If errors
-||| > occur, initscr writes  an  appropriate  error  message  to
-||| > standard error and exits; otherwise, a pointer is returned
-||| > to stdscr
-abstract
 initScr : IO Window
-initScr = mkForeign (FFun "initscr" [] FPtr)
+initScr = map MkWindow $ mkForeign (FFun "initscr" [] FPtr)
 
-||| Start it all up
-abstract
-initCurses : IO ()
-initCurses = do
-  initScr
-  b <- hasColors
-  when b $ startColor $> useDefaultColors
-  resetParams
+-- ||| Start it all up
+-- abstract
+-- initCurses : IO ()
+-- initCurses = do
+--   initScr
+--   b <- hasColors
+--   when b $ startColor $> useDefaultColors
+--   resetParams
 
 ||| > The program must call endwin for each terminal being used before
 ||| > exiting from curses.
@@ -226,6 +240,14 @@ abstract
 attr0 : Attr
 attr0 = MkAttr 0
 
+abstract
+attrOn : Attr -> IO ()
+attrOn (MkAttr attr) = mkForeign (FFun "attron" [FInt] FUnit) attr
+
+abstract
+attrOff : Attr -> IO ()
+attrOff (MkAttr attr) = mkForeign (FFun "attroff" [FInt] FUnit) attr
+
 ||| bitwise combination of attributes
 setAttr : Attr -> Attr -> Bool -> Attr
 setAttr (MkAttr b) (MkAttr a) False = MkAttr $ prim__andInt a $ prim__complInt b
@@ -265,17 +287,19 @@ bkgrndSet (MkAttr a) (MkPair p) = colorPair p >>= \pair =>
 
 ||| Write a String to a Window at current cursor position. The cursor will
 ||| be advanced after writing.
-||| @win      The Window that will be written on
 ||| @s        The String that will be written
-||| @maxC     If this is a non-negative number, it specifies the maximum number
-|||             of characters that will be printed
+||| @maxChars Specifies the maximum number of characters that will be printed
 abstract
-waddnstr : (win : Window) -> (s : String) -> (maxC : Int) -> IO Int
-waddnstr w s x = mkForeign (FFun "waddnstr" [FPtr, FString, FInt] FInt) w s x
+addNStr : (s : String) -> (maxChars : Nat) -> IO ()
+addNStr s n = do
+  (MkWindow scr) <- stdScr
+  mkForeign (FFun "waddnstr" [FPtr, FString, FInt] FUnit) scr s (toIntNat n)
 
 abstract
-waddstr : Window -> String -> IO Int
-waddstr win s = waddnstr win s (-1)
+addStr : String -> IO ()
+addStr s = do
+  (MkWindow scr) <- stdScr
+  mkForeign (FFun "waddstr" [FPtr, FString] FUnit) scr s
 
 abstract
 clrToEol : IO ()
@@ -287,8 +311,10 @@ clrToEol = mkForeign (FFun "clrtoeol" [] FUnit)
 ||| >    The position specified is relative to the upper  left-hand
 ||| >    corner of the window, which is (0,0).
 abstract
-wMove : Window -> Int -> Int -> IO ()
-wMove win y x = mkForeign (FFun "wmove" [FPtr, FInt, FInt] FUnit) win y x
+wMove : Int -> Int -> IO ()
+wMove y x = do
+  (MkWindow scr) <- stdScr
+  mkForeign (FFun "wmove" [FPtr, FInt, FInt] FUnit) scr y x
 
 curs_set : Int -> IO Int
 curs_set x = mkForeign (FFun "curs_set" [FInt] FInt) x
@@ -307,9 +333,11 @@ cursSet x = leaveOk False $> curs_set x
 
 ||| Get the current cursor coordinates
 abstract
-getYX : Window -> IO (Int, Int)
-getYX win = [| MkPair (mkForeign (FFun "getY" [FPtr] FInt) win)
-                      (mkForeign (FFun "getX" [FPtr] FInt) win) |]
+getYX : IO (Int, Int)
+getYX = do
+  (MkWindow scr) <- stdScr
+  [| MkPair (mkForeign (FFun "getY" [FPtr] FInt) scr)
+            (mkForeign (FFun "getX" [FPtr] FInt) scr) |]
 
 ||| >      The getch, wgetch, mvgetch and mvwgetch, routines read a
 ||| >      character  from the window.
@@ -369,11 +397,29 @@ keyResize = chr 410
 |||
 ||| Be warned, getCh will block the whole process without noDelay
 abstract
-getCh : IO Char
+getCh : IO $ ReturnValue Char
 getCh = do
+  refresh
   v <- getch
   case v of
-    (-1) => getCh
-    x    => return $ chr x
+    (-1) => return Err
+    c    => return . Val $ chr c
 
--- XXX Do we need this? cursesSigWinch : Signal
+abstract
+setGetChMode : GetChMode -> IO ()
+setGetChMode WaitForever           = raw False $> cBreak True  $> noDelay False
+setGetChMode WaitForeverRaw        = raw True                  $> noDelay False
+setGetChMode (Wait Z)              = raw False $> cBreak True  $> noDelay True
+setGetChMode (Wait (S k))          = halfDelay (toIntNat k)    $> noDelay False
+setGetChMode WaitForeverLinebuf    = raw False $> cBreak False $> noDelay False
+setGetChMode WaitForeverLinebufRaw = raw True  $> cBreak False $> noDelay False
+
+||| Use this function to start curses
+abstract
+initCurses : (getChMode : GetChMode) -> IO ()
+initCurses getChMode = do
+  initScr
+  echo False
+  keypad True
+  meta True
+  setGetChMode getChMode
