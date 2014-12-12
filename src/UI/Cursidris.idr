@@ -7,12 +7,7 @@ module Cursidris
 
 %access private
 
-||| A window, also referred to as a screen.
 data Window = MkWindow Ptr
-
-||| Some functions either return a value or Err
-public
-data ReturnValue a = Val a | Err
 
 ||| Use this for setGetChMode
 public
@@ -285,21 +280,21 @@ bkgrndSet (MkAttr a) (MkPair p) = colorPair p >>= \pair =>
                                                        ,131072
                                                        ]))
 
-||| Write a String to a Window at current cursor position. The cursor will
-||| be advanced after writing.
+||| Write a String to the standard screen at current cursor position.
+||| The cursor will be advanced after writing.
 ||| @s        The String that will be written
 ||| @maxChars Specifies the maximum number of characters that will be printed
 abstract
 addNStr : (s : String) -> (maxChars : Nat) -> IO ()
-addNStr s n = do
-  (MkWindow scr) <- stdScr
-  mkForeign (FFun "waddnstr" [FPtr, FString, FInt] FUnit) scr s (toIntNat n)
+addNStr s n = mkForeign (FFun "addnstr" [FString, FInt] FUnit) s (toIntNat n)
 
 abstract
 addStr : String -> IO ()
-addStr s = do
-  (MkWindow scr) <- stdScr
-  mkForeign (FFun "waddstr" [FPtr, FString] FUnit) scr s
+addStr s = mkForeign (FFun "addstr" [FString] FUnit) s
+
+abstract
+addCh : Char -> IO ()
+addCh c = mkForeign (FFun "addch" [FChar] FUnit) c
 
 abstract
 clrToEol : IO ()
@@ -311,10 +306,8 @@ clrToEol = mkForeign (FFun "clrtoeol" [] FUnit)
 ||| >    The position specified is relative to the upper  left-hand
 ||| >    corner of the window, which is (0,0).
 abstract
-wMove : Int -> Int -> IO ()
-wMove y x = do
-  (MkWindow scr) <- stdScr
-  mkForeign (FFun "wmove" [FPtr, FInt, FInt] FUnit) scr y x
+move : Int -> Int -> IO ()
+move y x = mkForeign (FFun "move" [FInt, FInt] FUnit) y x
 
 curs_set : Int -> IO Int
 curs_set x = mkForeign (FFun "curs_set" [FInt] FInt) x
@@ -338,6 +331,10 @@ getYX = do
   (MkWindow scr) <- stdScr
   [| MkPair (mkForeign (FFun "getY" [FPtr] FInt) scr)
             (mkForeign (FFun "getX" [FPtr] FInt) scr) |]
+
+abstract
+getMaxYX : IO (Int, Int)
+getMaxYX = scrSize >>= \(row, col) => return (row - 1, col - 1)
 
 ||| >      The getch, wgetch, mvgetch and mvwgetch, routines read a
 ||| >      character  from the window.
@@ -388,6 +385,30 @@ abstract
 keyResize : Char
 keyResize = chr 410
 
+abstract
+clear : IO ()
+clear = mkForeign (FFun "clear" [] FUnit)
+
+abstract
+moveNextCh : IO ()
+moveNextCh = do
+  (maxY, maxX) <- getMaxYX
+  (y, x) <- getYX
+  let (newY, newX) = if x >= maxX
+    then if y >= maxY then (maxY, maxX) else (y + 1, 0)
+    else (y, x + 1)
+  move newY newX
+
+abstract
+movePrevCh : IO ()
+movePrevCh = do
+  (maxY, maxX) <- getMaxYX
+  (y, x) <- getYX
+  let (newY, newX) = if x <= 0
+    then if y <= 0 then (0, 0) else (y - 1, maxX)
+    else (y, x - 1)
+  move newY newX
+
 ||| read a character from the window
 |||
 ||| When 'ESC' followed by another key is pressed before the ESC timeout,
@@ -397,13 +418,46 @@ keyResize = chr 410
 |||
 ||| Be warned, getCh will block the whole process without noDelay
 abstract
-getCh : IO $ ReturnValue Char
+getCh : IO (Maybe Char)
 getCh = do
   refresh
   v <- getch
   case v of
-    (-1) => return Err
-    c    => return . Val $ chr c
+    (-1) => return Nothing
+    c    => return . return $ chr c
+
+abstract
+forceCh : IO Char
+forceCh = do
+  refresh
+  v <- getch
+  case v of
+    (-1) => forceCh
+    c    => return $ chr c
+
+abstract
+getStr : (useEcho : Bool) -> (setEcho : Bool) -> IO String
+getStr useEcho setEcho = do
+    echo useEcho
+    (y, x) <- getYX
+    (maxY, maxX) <- scrSize
+    str <- map reverse $ getRawStr y x ""
+    echo setEcho
+    return str
+  where
+    getRawStr : Int -> Int -> String -> IO String
+    getRawStr initY initX str = do
+      (preY, preX) <- getYX
+      c <- forceCh
+      (y, x) <- getYX
+      case c of
+        '\n'   => move preY preX $> return str
+        '\263' => if y <= initY && x < initX
+                    then move preY preX $> getRawStr initY initX str
+                    else do addStr " "
+                            move y x
+                            getRawStr initY initX $ strTail str
+        char   => getRawStr initY initX $ strCons char str
 
 abstract
 setGetChMode : GetChMode -> IO ()
