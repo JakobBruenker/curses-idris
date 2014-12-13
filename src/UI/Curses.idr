@@ -1,4 +1,4 @@
-module Cursidris
+module Curses
 
 %include C "curses.h"
 %include C "cursesrun.h"
