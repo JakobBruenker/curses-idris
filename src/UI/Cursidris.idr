@@ -1,11 +1,11 @@
 module Cursidris
 
-%include C "ncurses.h"
+%include C "curses.h"
 %include C "cursesrun.h"
 %link C "cursesrun.o"
-%lib C "ncurses"
+%lib C "curses"
 
-%access private
+%access public
 
 data Window = MkWindow Ptr
 
@@ -17,6 +17,56 @@ data GetChMode : Type where
   Wait                  : (k : Nat) -> GetChMode
   WaitForeverLinebuf    : GetChMode
   WaitForeverLinebufRaw : GetChMode
+
+public
+data Color = Black
+           | Red
+           | Green
+           | Yellow
+           | Blue
+           | Magenta
+           | Cyan
+           | White
+
+public
+data ColorPair : Type where
+  MkColorPair : Nat -> (foreground : Color) -> (background : Color) -> ColorPair
+
+data AttrNum = MkAttrNum Int
+
+public
+data Attr = Normal
+          | Standout
+          | Underline
+          | Reverse
+          | Blink
+          | Dim
+          | Bold
+          | AltCharSet
+          | Invis
+          | Protect
+
+colorToInt : Color -> Int
+colorToInt Black   = 0
+colorToInt Red     = 1
+colorToInt Green   = 2
+colorToInt Yellow  = 3
+colorToInt Blue    = 4
+colorToInt Magenta = 5
+colorToInt Cyan    = 6
+colorToInt White   = 7
+
+attrToInt : Attr -> Int
+attrToInt Normal     = 0
+attrToInt Standout   = pow 2 16
+attrToInt Underline  = pow 2 17
+attrToInt Reverse    = pow 2 18
+attrToInt Blink      = pow 2 19
+attrToInt Dim        = pow 2 20
+attrToInt Bold       = pow 2 21
+attrToInt AltCharSet = pow 2 22
+attrToInt Invis      = pow 2 23
+attrToInt Protect    = pow 2 24
 
 cBool : Bool -> Int
 cBool True  = 1
@@ -111,28 +161,28 @@ raw : Bool -> IO ()
 raw True  = mkForeign (FFun "raw"   [] FUnit)
 raw False = mkForeign (FFun "noraw" [] FUnit)
 
-||| A bunch of settings we need
-abstract
-resetParams : IO ()
-resetParams = do
-  cBreak True
-  echo False
-  nl True
-  leaveOk True
-  meta True
-  keypad True
-  noDelay False
-  return ()
-
-||| The use_default_colors() and assume_default_colors() func-
-|||  tions are extensions to the curses library.  They are used
-|||  with terminals that support ISO 6429 color, or equivalent.
-|||
-||| use_default_colors() tells the  curses library  to  assign terminal
-||| default foreground/background colors to color number  -1.
-useDefaultColors : IO ()
-useDefaultColors = return ()
-
+-- ||| A bunch of settings we need
+-- abstract
+-- resetParams : IO ()
+-- resetParams = do
+--   cBreak True
+--   echo False
+--   nl True
+--   leaveOk True
+--   meta True
+--   keypad True
+--   noDelay False
+--   return ()
+-- 
+-- ||| The use_default_colors() and assume_default_colors() func-
+-- |||  tions are extensions to the curses library.  They are used
+-- |||  with terminals that support ISO 6429 color, or equivalent.
+-- |||
+-- ||| use_default_colors() tells the  curses library  to  assign terminal
+-- ||| default foreground/background colors to color number  -1.
+-- useDefaultColors : IO ()
+-- useDefaultColors = return ()
+-- 
 ||| Initialise the color settings, also sets the screen on the default
 ||| colors (white on black)
 startColor : IO ()
@@ -170,115 +220,123 @@ abstract
 refresh : IO ()
 refresh = mkForeign (FFun "refresh" [] FUnit)
 
-public
-data Pair = MkPair Int
-
-public
-data Color = MkColor Int
-
-abstract
-color : String -> Color
-color "black"   = MkColor 0
-color "red"     = MkColor 1
-color "green"   = MkColor 2
-color "yellow"  = MkColor 3
-color "blue"    = MkColor 4
-color "magenta" = MkColor 5
-color "cyan"    = MkColor 6
-color "white"   = MkColor 7
-color _         = MkColor 8
-
-||| > curses support color attributes  on  terminals  with  that
-||| > capability.   To  use  these  routines start_color must be
-||| > called, usually right after initscr.   Colors  are  always
-||| > used  in pairs (referred to as color-pairs).  A color-pair
-||| > consists of a foreground  color  (for  characters)  and  a
-||| > background color (for the blank field on which the charac-
-||| > ters are displayed).  A programmer  initializes  a  color-
-||| > pair  with  the routine init_pair.  After it has been ini-
-||| > tialized, COLOR_PAIR(n), a macro  defined  in  <curses.h>,
-||| > can be used as a new video attribute.
-|||
-||| > If  a  terminal  is capable of redefining colors, the pro-
-||| > grammer can use the routine init_color to change the defi-
-||| > nition   of   a   color.
-|||
-||| > The init_pair routine changes the definition of  a  color-
-||| > pair.   It takes three arguments: the number of the color-
-||| > pair to be changed, the foreground color number,  and  the
-||| > background color number.  For portable applications:
-|||
-||| > -  The value of the first argument must be between 1 and
-||| >    COLOR_PAIRS-1.
-|||
-||| > -  The value of the second and third arguments  must  be
-||| >    between  0  and  COLORS (the 0 color pair is wired to
-||| >    white on black and cannot be changed).
-abstract
-initPair : Pair -> Color -> Color -> IO ()
-initPair (MkPair p) (MkColor f) (MkColor b) =
-  mkForeign (FFun "init_pair" [FInt, FInt, FInt] FUnit) p f b
-
-public
-data Attr = MkAttr Int
-
-colorPair : Int -> IO Int
-colorPair x = mkForeign (FFun "get_color_pair" [FInt] FInt) x
+-- public
+-- data Pair = MkPair Int
+-- 
+-- public
+-- data Color = MkColor Int
+-- 
+-- abstract
+-- color : String -> Color
+-- color "black"   = MkColor 0
+-- color "red"     = MkColor 1
+-- color "green"   = MkColor 2
+-- color "yellow"  = MkColor 3
+-- color "blue"    = MkColor 4
+-- color "magenta" = MkColor 5
+-- color "cyan"    = MkColor 6
+-- color "white"   = MkColor 7
+-- color _         = MkColor 8
+-- 
+-- ||| > curses support color attributes  on  terminals  with  that
+-- ||| > capability.   To  use  these  routines start_color must be
+-- ||| > called, usually right after initscr.   Colors  are  always
+-- ||| > used  in pairs (referred to as color-pairs).  A color-pair
+-- ||| > consists of a foreground  color  (for  characters)  and  a
+-- ||| > background color (for the blank field on which the charac-
+-- ||| > ters are displayed).  A programmer  initializes  a  color-
+-- ||| > pair  with  the routine init_pair.  After it has been ini-
+-- ||| > tialized, COLOR_PAIR(n), a macro  defined  in  <curses.h>,
+-- ||| > can be used as a new video attribute.
+-- |||
+-- ||| > If  a  terminal  is capable of redefining colors, the pro-
+-- ||| > grammer can use the routine init_color to change the defi-
+-- ||| > nition   of   a   color.
+-- |||
+-- ||| > The init_pair routine changes the definition of  a  color-
+-- ||| > pair.   It takes three arguments: the number of the color-
+-- ||| > pair to be changed, the foreground color number,  and  the
+-- ||| > background color number.  For portable applications:
+-- |||
+-- ||| > -  The value of the first argument must be between 1 and
+-- ||| >    COLOR_PAIRS-1.
+-- |||
+-- ||| > -  The value of the second and third arguments  must  be
+-- ||| >    between  0  and  COLORS (the 0 color pair is wired to
+-- ||| >    white on black and cannot be changed).
 
 abstract
-attrSet : Attr -> Pair -> IO ()
-attrSet (MkAttr attr) (MkPair p) = do
-  pair <- colorPair p
-  mkForeign (FFun "attrset" [FInt] FUnit) (prim__orInt attr pair)
-
-abstract
-attr0 : Attr
-attr0 = MkAttr 0
-
-abstract
-attrOn : Attr -> IO ()
-attrOn (MkAttr attr) = mkForeign (FFun "attron" [FInt] FUnit) attr
-
-abstract
-attrOff : Attr -> IO ()
-attrOff (MkAttr attr) = mkForeign (FFun "attroff" [FInt] FUnit) attr
-
-||| bitwise combination of attributes
-setAttr : Attr -> Attr -> Bool -> Attr
-setAttr (MkAttr b) (MkAttr a) False = MkAttr $ prim__andInt a $ prim__complInt b
-setAttr (MkAttr b) (MkAttr a) True  = MkAttr $ prim__orInt  a b
-
-abstract
-setBold : Attr -> Bool -> Attr
-setBold = setAttr $ MkAttr 2097152
-
-abstract
-setReverse : Attr -> Bool -> Attr
-setReverse = setAttr $ MkAttr 262144
-
-abstract
-attrPlus : Attr -> Attr -> Attr
-attrPlus (MkAttr a) (MkAttr b) = MkAttr $ prim__orInt a b
-
-abstract
-bkgrndSet : Attr -> Pair -> IO ()
-bkgrndSet (MkAttr a) (MkPair p) = colorPair p >>= \pair => 
-  bkgdset (prim__orInt (ord ' ') (prim__orInt ored pair))
+initPair : ColorPair -> IO ()
+initPair (MkColorPair natIndex colorFG colorBG) =
+  mkForeign (FFun "init_pair" [FInt, FInt, FInt] FUnit) ind fg bg 
   where
-    bkgdset : Int -> IO ()
-    bkgdset x = mkForeign (FFun "bkgdset" [FInt] FUnit) x
-    testZero : Int -> Int
-    testZero x = if prim__andInt a x /= 0 then x else 0
-    ored = foldr1 prim__orInt (map testZero (with List [4194304
-                                                       ,524288
-                                                       ,2097152
-                                                       ,1048576
-                                                       ,8388608
-                                                       ,16777216
-                                                       ,262144
-                                                       ,65536
-                                                       ,131072
-                                                       ]))
+    ind : Int
+    ind = toIntNat natIndex
+    fg  : Int
+    fg  = colorToInt colorFG
+    bg  : Int
+    bg  = colorToInt colorBG
+
+setAttr : Int -> IO ()
+setAttr a = mkForeign (FFun "setattr" [FInt] FUnit) a
+
+-- colorPair : Int -> IO Int
+-- colorPair x = mkForeign (FFun "get_color_pair" [FInt] FInt) x
+-- 
+-- abstract
+-- attrSet : Attr -> Pair -> IO ()
+-- attrSet (MkAttr attr) (MkPair p) = do
+--   pair <- colorPair p
+--   mkForeign (FFun "attrset" [FInt] FUnit) (prim__orInt attr pair)
+-- 
+-- abstract
+-- attr0 : Attr
+-- attr0 = MkAttr 0
+
+-- abstract
+-- attrOn : Attr -> IO ()
+-- attrOn (MkAttr attr) = mkForeign (FFun "attron" [FInt] FUnit) attr
+-- 
+-- abstract
+-- attrOff : Attr -> IO ()
+-- attrOff (MkAttr attr) = mkForeign (FFun "attroff" [FInt] FUnit) attr
+
+-- ||| bitwise combination of attributes
+-- setAttr : Attr -> Attr -> Bool -> Attr
+-- setAttr (MkAttr b) (MkAttr a) False = MkAttr $ prim__andInt a $ prim__complInt b
+-- setAttr (MkAttr b) (MkAttr a) True  = MkAttr $ prim__orInt  a b
+-- 
+-- abstract
+-- setBold : Attr -> Bool -> Attr
+-- setBold = setAttr $ MkAttr 2097152
+-- 
+-- abstract
+-- setReverse : Attr -> Bool -> Attr
+-- setReverse = setAttr $ MkAttr 262144
+-- 
+-- abstract
+-- attrPlus : Attr -> Attr -> Attr
+-- attrPlus (MkAttr a) (MkAttr b) = MkAttr $ prim__orInt a b
+-- 
+-- abstract
+-- bkgrndSet : Attr -> Pair -> IO ()
+-- bkgrndSet (MkAttr a) (MkPair p) = colorPair p >>= \pair => 
+--   bkgdset (prim__orInt (ord ' ') (prim__orInt ored pair))
+--   where
+--     bkgdset : Int -> IO ()
+--     bkgdset x = mkForeign (FFun "bkgdset" [FInt] FUnit) x
+--     testZero : Int -> Int
+--     testZero x = if prim__andInt a x /= 0 then x else 0
+--     ored = foldr1 prim__orInt (map testZero (with List [4194304
+--                                                        ,524288
+--                                                        ,2097152
+--                                                        ,1048576
+--                                                        ,8388608
+--                                                        ,16777216
+--                                                        ,262144
+--                                                        ,65536
+--                                                        ,131072
+--                                                        ]))
 
 ||| Write a String to the standard screen at current cursor position.
 ||| The cursor will be advanced after writing.
@@ -390,6 +448,16 @@ clear : IO ()
 clear = mkForeign (FFun "clear" [] FUnit)
 
 abstract
+setAttrAndColor : List Attr -> Maybe (Color, Color) -> IO ()
+setAttrAndColor as c = do when (isJust c) $ initPair (colorPair c)
+                          setAttr $ combineAttr (cBool $ isJust c) as
+  where
+    combineAttr : Int -> List Attr -> Int
+    combineAttr col = foldr prim__orInt col . map attrToInt
+    colorPair : Maybe (Color, Color) -> ColorPair
+    colorPair (Just (fg, bg)) = MkColorPair 1 fg bg
+
+abstract
 moveNextCh : IO ()
 moveNextCh = do
   (maxY, maxX) <- getMaxYX
@@ -454,9 +522,11 @@ getStr useEcho setEcho = do
         '\n'   => move preY preX $> return str
         '\263' => if y <= initY && x < initX
                     then move preY preX $> getRawStr initY initX str
-                    else do addStr " "
-                            move y x
-                            getRawStr initY initX $ strTail str
+                    else do
+                      if (preY, preX) == (y, x)
+                        then movePrevCh $> addStr " " $> movePrevCh
+                        else addStr " " $> move y x
+                      getRawStr initY initX $ strTail str
         char   => getRawStr initY initX $ strCons char str
 
 abstract
@@ -470,10 +540,13 @@ setGetChMode WaitForeverLinebufRaw = raw True  $> cBreak False $> noDelay False
 
 ||| Use this function to start curses
 abstract
-initCurses : (getChMode : GetChMode) -> IO ()
-initCurses getChMode = do
+initCurses : (getChMode : GetChMode) -> (enableColors : Bool) -> IO ()
+initCurses getChMode enableColors = do
   initScr
+  when enableColors startColor
+  nl True
   echo False
   keypad True
   meta True
+  leaveOk True
   setGetChMode getChMode
