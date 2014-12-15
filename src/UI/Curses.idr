@@ -45,6 +45,77 @@ data Attr = Normal
           | AltCharSet
           | Invis
           | Protect
+namespace Curser
+  public
+  data CurserState = Invisible
+                   | Normal
+                   | VeryVisible
+
+data SpecialChar = Escape
+                 | Backspace
+                 | Up
+                 | Down
+                 | Left
+                 | Right
+                 | F1
+                 | F2
+                 | F3
+                 | F4
+                 | F5
+                 | F6
+                 | F7
+                 | F8
+                 | F9
+                 | F10
+                 | F11
+                 | F12
+                 | Insert
+                 | Delete
+                 | Home
+                 | End
+                 | PageUp
+                 | PageDown
+                 | Tab
+                 | Enter
+
+specialChar : SpecialChar -> Char
+specialChar Escape    = '\ESC'
+specialChar Backspace = '\263' 
+specialChar Up        = '\259'
+specialChar Down      = '\258'
+specialChar Left      = '\260'
+specialChar Right     = '\261'
+specialChar F1        = '\410'
+specialChar F2        = '\266'
+specialChar F3        = '\267'
+specialChar F4        = '\268'
+specialChar F5        = '\269'
+specialChar F6        = '\270'
+specialChar F7        = '\271'
+specialChar F8        = '\272'
+specialChar F9        = '\273'
+specialChar F10       = '\274'
+specialChar F11       = '\275'
+specialChar F12       = '\276'
+specialChar Insert    = '\331'
+specialChar Delete    = '\330'
+specialChar Home      = '\262'
+specialChar End       = '\360'
+specialChar PageUp    = '\339'
+specialChar PageDown  = '\338'
+specialChar Tab       = '\t'
+specialChar Enter     = '\n'
+
+intToCurserState : Int -> Maybe CurserState
+intToCurserState 0 = Just Invisible
+intToCurserState 1 = Just Normal
+intToCurserState 2 = Just VeryVisible
+intToCurserState _ = Nothing
+
+curserStateToInt : CurserState -> Int
+curserStateToInt Invisible   = 0
+curserStateToInt Normal      = 1
+curserStateToInt VeryVisible = 2
 
 colorToInt : Color -> Int
 colorToInt Black   = 0
@@ -278,7 +349,7 @@ initPair (MkColorPair natIndex colorFG colorBG) =
     bg  = colorToInt colorBG
 
 setAttr : Int -> IO ()
-setAttr a = mkForeign (FFun "setattr" [FInt] FUnit) a
+setAttr a = mkForeign (FFun "attrset" [FInt] FUnit) a
 
 -- colorPair : Int -> IO Int
 -- colorPair x = mkForeign (FFun "get_color_pair" [FInt] FInt) x
@@ -293,9 +364,9 @@ setAttr a = mkForeign (FFun "setattr" [FInt] FUnit) a
 -- attr0 : Attr
 -- attr0 = MkAttr 0
 
--- abstract
--- attrOn : Attr -> IO ()
--- attrOn (MkAttr attr) = mkForeign (FFun "attron" [FInt] FUnit) attr
+abstract
+attrOn : Int -> IO ()
+attrOn attr = mkForeign (FFun "attron" [FInt] FUnit) attr
 -- 
 -- abstract
 -- attrOff : Attr -> IO ()
@@ -378,9 +449,10 @@ curs_set x = mkForeign (FFun "curs_set" [FInt] FInt) x
 ||| >       visibility   requested,   the  previous  cursor  state  is
 ||| >       returned; otherwise, ERR is returned.
 abstract
-cursSet : Int -> IO Int
-cursSet 0 = leaveOk True  $> curs_set 0
-cursSet x = leaveOk False $> curs_set x
+cursSet : CurserState -> IO $ Maybe CurserState
+cursSet Invisible = leaveOk True  $> curs_set 0 >>= return . intToCurserState
+cursSet cs = leaveOk False $> curs_set (curserStateToInt cs) >>=
+  return . intToCurserState
 
 ||| Get the current cursor coordinates
 abstract
@@ -447,10 +519,16 @@ abstract
 clear : IO ()
 clear = mkForeign (FFun "clear" [] FUnit)
 
+-- setAttrAndColor : List Attr -> Maybe (Color, Color) -> IO ()
+-- setAttrAndColor as c = do
+--   initPair $ MkColorPair 1 Red Black
+--   attrOn 256
+--   addStr "Testing setAttrAndColor"
+
 abstract
 setAttrAndColor : List Attr -> Maybe (Color, Color) -> IO ()
 setAttrAndColor as c = do when (isJust c) $ initPair (colorPair c)
-                          setAttr $ combineAttr (cBool $ isJust c) as
+                          setAttr $ combineAttr (256 * cBool (isJust c)) as
   where
     combineAttr : Int -> List Attr -> Int
     combineAttr col = foldr prim__orInt col . map attrToInt
@@ -486,7 +564,7 @@ movePrevCh = do
 |||
 ||| Be warned, getCh will block the whole process without noDelay
 abstract
-getCh : IO (Maybe Char)
+getCh : IO $ Maybe Char
 getCh = do
   refresh
   v <- getch
@@ -519,15 +597,14 @@ getStr useEcho setEcho = do
       c <- forceCh
       (y, x) <- getYX
       case c of
-        '\n'   => move preY preX $> return str
-        '\263' => if y <= initY && x < initX
-                    then move preY preX $> getRawStr initY initX str
-                    else do
-                      if (preY, preX) == (y, x)
-                        then movePrevCh $> addStr " " $> movePrevCh
-                        else addStr " " $> move y x
-                      getRawStr initY initX $ strTail str
-        char   => getRawStr initY initX $ strCons char str
+        specialChar Enter     => move preY preX $> return str
+        specialChar Backspace => if y <= initY && x < initX
+          then move preY preX $> getRawStr initY initX str
+          else do if (preY, preX) == (y, x)
+                    then movePrevCh $> addStr " " $> movePrevCh
+                    else addStr " " $> move y x
+                  getRawStr initY initX $ strTail str
+        char                  => getRawStr initY initX $ strCons char str
 
 abstract
 setGetChMode : GetChMode -> IO ()
@@ -540,13 +617,16 @@ setGetChMode WaitForeverLinebufRaw = raw True  $> cBreak False $> noDelay False
 
 ||| Use this function to start curses
 abstract
-initCurses : (getChMode : GetChMode) -> (enableColors : Bool) -> IO ()
-initCurses getChMode enableColors = do
+runCurses : (enableColors : Bool) -> (getChMode : GetChMode) -> IO a -> IO a
+runCurses enableColors getChMode actions = do
   initScr
   when enableColors startColor
   nl True
   echo False
   keypad True
   meta True
-  leaveOk True
+  leaveOk False
   setGetChMode getChMode
+  result <- actions
+  endWin
+  return result
