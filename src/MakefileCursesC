@@ -1,5 +1,4 @@
 CC = gcc
-CFLAGS = `-lcurses` `-c`
 
 cursesrun.o: cursesrun.c cursesrun.h
 
