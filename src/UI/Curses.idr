@@ -452,11 +452,11 @@ setGetChMode WaitForeverLinebufRaw = raw True  $> cBreak False $> noDelay False
 ||| @enableColors whether colors should be enabled or not (note that some
 |||                 terminals may not support colors)
 ||| @getChMode    the mode that `getCh` will use
-||| @actions      the IO action that curses will run , `runCurses` will return
+||| @actions      the IO actions that curses will run, `runCurses` will return
 |||                 the result of these actions
 abstract
 runCurses : (enableColors : Bool) -> (getChMode : GetChMode) ->
-  (action : IO a) -> IO a
+  (actions : IO a) -> IO a
 runCurses enableColors getChMode actions = do
   initScr
   when enableColors startColor
