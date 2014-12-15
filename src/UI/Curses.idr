@@ -448,12 +448,12 @@ setGetChMode (Wait (S k))          = halfDelay (toIntNat k)    $> noDelay False
 setGetChMode WaitForeverLinebuf    = raw False $> cBreak False $> noDelay False
 setGetChMode WaitForeverLinebufRaw = raw True  $> cBreak False $> noDelay False
 
-||| Use this function to start curses.
+||| Use this function to run curses.
 ||| @enableColors whether colors should be enabled or not (note that some
 |||                 terminals may not support colors)
 ||| @getChMode    the mode that `getCh` will use
-||| @action       the IO action that curses will run (put all curses actions
-|||                 here) - runCurses will return the result of that action
+||| @actions      the IO action that curses will run , `runCurses` will return
+|||                 the result of these actions
 abstract
 runCurses : (enableColors : Bool) -> (getChMode : GetChMode) ->
   (action : IO a) -> IO a
