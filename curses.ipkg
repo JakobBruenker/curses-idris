@@ -1,0 +1,9 @@
+package curses
+
+sourcedir = src
+modules = UI.Curses
+
+makefile = MakefileCursesC
+
+objs = cursesrun.o, cursesrun.h
+libs = curses

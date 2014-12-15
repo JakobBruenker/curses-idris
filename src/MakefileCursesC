@@ -1,0 +1,9 @@
+CC = gcc
+CFLAGS = `-lcurses` `-c`
+
+cursesrun.o: cursesrun.c cursesrun.h
+
+clean: .PHONY
+	rm cursesrun.o
+
+.PHONY:
