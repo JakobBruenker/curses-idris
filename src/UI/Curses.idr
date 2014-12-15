@@ -5,19 +5,40 @@ module Curses
 %link C "cursesrun.o"
 %lib C "curses"
 
-%access public
+%access private
 
+||| A window, also known as screen.
+|||
+||| This is used to interface with certain C functions.
 data Window = MkWindow Ptr
 
-||| Use this for setGetChMode
+||| The modes that `getCh` can use to get characters.
 public
 data GetChMode : Type where
+  ||| `getCh` waits for the user to press a key, but doesn't affect interrupt
+  ||| and control flow characters.
   WaitForever           : GetChMode
+  ||| `getCh` waits for the user to press a key, allows the program to determine
+  ||| what happens when interrupt or control flow characters are encountered.
   WaitForeverRaw        : GetChMode
+  ||| `getCh` waits for a certain amount of time before returning Nothing.
+  ||| Doesn't affect interrupt and control flow characters.
+  ||| @k tenths of a second `getCh` will wait
   Wait                  : (k : Nat) -> GetChMode
+  ||| `getCh` waits for the user to press a key, but the program doesn't
+  ||| receive any information about which keys have been pressed until a
+  ||| newline character is encountered. Doesn't affect interrupt and control
+  ||| flow characters.
   WaitForeverLinebuf    : GetChMode
+  ||| `getCh` waits for the user to press a key, but the program doesn't
+  ||| receive any information about which keys have been pressed until a newline
+  ||| character is encountered. Allows the program to determine what happens
+  ||| when interrupt or control flow characters are encountered.
   WaitForeverLinebufRaw : GetChMode
 
+||| These are the color that are defined once curses is initialized.
+|||
+||| Note that some terminals may display these colors differently.
 public
 data Color = Black
            | Red
@@ -28,29 +49,51 @@ data Color = Black
            | Cyan
            | White
 
-public
+||| This is used to give a foreground and a background color to `init_pair`.
 data ColorPair : Type where
-  MkColorPair : Nat -> (foreground : Color) -> (background : Color) -> ColorPair
+  ||| Use this constructor to make a ColorPair.
+  ||| @i index of the ColorPair
+  ||| @foreground foreground color
+  ||| @background background color
+  MkColorPair : (i : Nat) -> (foreground : Color) -> (background : Color) ->
+    ColorPair
 
-data AttrNum = MkAttrNum Int
-
+||| These are the attributes that can be used to print text in various ways.
+|||
+||| Note that some terminals may not support all of these attributes.
 public
-data Attr = Normal
-          | Standout
-          | Underline
-          | Reverse
-          | Blink
-          | Dim
-          | Bold
-          | AltCharSet
-          | Invis
-          | Protect
-namespace Curser
+data Attr : Type where
+  ||| Prints text normally.
+  Normal      : Attr
+  ||| Highlights the printed text.
+  Standout    : Attr
+  ||| Puts a line under printed text.
+  Underline   : Attr
+  ||| Reverses the foreground and background colors.
+  Reverse     : Attr
+  ||| Prints blinking text.
+  Blink       : Attr
+  ||| Prints half bright text.
+  Dim         : Attr
+  ||| Prints bold text.
+  Bold        : Attr
+  ||| Prints with an alternate character set.
+  AltCharSet  : Attr
+  ||| Prints out invisible text.
+  Invis       : Attr
+  ||| Protects printed text.
+  Protect     : Attr
+
+namespace Cursor
+  ||| These are the available cursor states.
   public
-  data CurserState = Invisible
+  data CursorState = Invisible
                    | Normal
                    | VeryVisible
 
+||| These are special characters, which can be converted into regular
+||| Characters with the function `specialChar`.
+public
 data SpecialChar = Escape
                  | Backspace
                  | Up
@@ -78,6 +121,8 @@ data SpecialChar = Escape
                  | Tab
                  | Enter
 
+||| Converts a `SpecialChar` into a regular `Char`.
+public
 specialChar : SpecialChar -> Char
 specialChar Escape    = '\ESC'
 specialChar Backspace = '\263' 
@@ -106,16 +151,16 @@ specialChar PageDown  = '\338'
 specialChar Tab       = '\t'
 specialChar Enter     = '\n'
 
-intToCurserState : Int -> Maybe CurserState
-intToCurserState 0 = Just Invisible
-intToCurserState 1 = Just Normal
-intToCurserState 2 = Just VeryVisible
-intToCurserState _ = Nothing
+intToCursorState : Int -> Maybe CursorState
+intToCursorState 0 = Just Invisible
+intToCursorState 1 = Just Normal
+intToCursorState 2 = Just VeryVisible
+intToCursorState _ = Nothing
 
-curserStateToInt : CurserState -> Int
-curserStateToInt Invisible   = 0
-curserStateToInt Normal      = 1
-curserStateToInt VeryVisible = 2
+cursorStateToInt : CursorState -> Int
+cursorStateToInt Invisible   = 0
+cursorStateToInt Normal      = 1
+cursorStateToInt VeryVisible = 2
 
 colorToInt : Color -> Int
 colorToInt Black   = 0
@@ -146,20 +191,15 @@ cBool False = 0
 idrBool : Int -> Bool
 idrBool = (/= 0)
 
-||| The standard screen
+||| Returns the standard window.
 stdScr : IO Window
 stdScr = map MkWindow $ mkForeign (FFun "stdScr" [] FPtr)
 
-||| > The nodelay option causes getch to be a non-blocking call.
-||| > If  no input is ready, getch returns ERR.  If disabled (bf
-||| > is FALSE), getch waits until a key is pressed.
-abstract
 noDelay : Bool -> IO ()
 noDelay bf = do
   (MkWindow scr) <- stdScr
   mkForeign (FFun "nodelay" [FPtr, FInt] FUnit) scr (cBool bf)
 
-abstract
 halfDelay : Int -> IO ()
 halfDelay delay = mkForeign (FFun "halfdelay" [FInt] FUnit) delay
 
@@ -177,53 +217,22 @@ meta bf = do
   (MkWindow scr) <- stdScr
   mkForeign (FFun "meta" [FPtr, FInt] FUnit) scr (cBool bf)
 
-||| > Normally, the hardware cursor is left at the  location  of
-||| > the  window  cursor  being  refreshed.  The leaveok option
-||| > allows the cursor to be left wherever the  update  happens
-||| > to leave it.  It is useful for applications where the cur-
-||| > sor is not used, since it  reduces  the  need  for  cursor
-||| > motions.   If  possible, the cursor is made invisible when
-||| > this option is enabled.
 leaveOk : Bool -> IO Int
 leaveOk bf = do
   (MkWindow scr) <- stdScr
   mkForeign (FFun "leaveok" [FPtr, FInt] FInt) scr (cBool bf)
 
-||| > The  nl  and  nonl routines control whether the underlying
-||| > display device translates the return key into  newline  on
-||| > input,  and  whether it translates newline into return and
-||| > line-feed on output (in either case, the call  addch('\n')
-||| > does the equivalent of return and line feed on the virtual
-||| > screen).  Initially, these translations do occur.  If  you
-||| > disable  them using nonl, curses will be able to make bet-
-||| > ter use of the line-feed capability, resulting  in  faster
-||| > cursor  motion.   Also, curses will then be able to detect
-||| > the return key.
 nl : Bool -> IO ()
 nl True  = mkForeign (FFun "nl"   [] FUnit)
 nl False = mkForeign (FFun "nonl" [] FUnit)
 
-||| > The  echo  and  noecho routines control whether characters
-||| > typed by the user are echoed by getch as they  are  typed.
-||| > Echoing  by  the  tty  driver is always disabled, but ini-
-||| > tially getch is in echo  mode,  so  characters  typed  are
-||| > echoed.  Authors of most interactive programs prefer to do
-||| > their own echoing in a controlled area of the  screen,  or
-||| > not  to  echo  at  all, so they disable echoing by calling
-||| > noecho.  [See curs_getch(3) for a discussion of how  these
-||| > routines interact with cbreak and nocbreak.]
+||| `echo` determines whether a character will be printed when the user presses
+||| a key
 abstract
 echo : Bool -> IO ()
 echo False = mkForeign (FFun "noecho" [] FUnit)
 echo True  = mkForeign (FFun "echo"   [] FUnit)
 
-||| > The cbreak routine
-||| > disables line buffering and erase/kill  character-process-
-||| > ing  (interrupt  and  flow  control  characters  are unaf-
-||| > fected), making characters typed by the  user  immediately
-||| > available  to  the  program.  The nocbreak routine returns
-||| > the terminal to normal (cooked) mode.
-abstract
 cBreak : Bool -> IO ()
 cBreak True  = mkForeign (FFun "cbreak"   [] FUnit)
 cBreak False = mkForeign (FFun "nocbreak" [] FUnit)
@@ -232,111 +241,30 @@ raw : Bool -> IO ()
 raw True  = mkForeign (FFun "raw"   [] FUnit)
 raw False = mkForeign (FFun "noraw" [] FUnit)
 
--- ||| A bunch of settings we need
--- abstract
--- resetParams : IO ()
--- resetParams = do
---   cBreak True
---   echo False
---   nl True
---   leaveOk True
---   meta True
---   keypad True
---   noDelay False
---   return ()
--- 
--- ||| The use_default_colors() and assume_default_colors() func-
--- |||  tions are extensions to the curses library.  They are used
--- |||  with terminals that support ISO 6429 color, or equivalent.
--- |||
--- ||| use_default_colors() tells the  curses library  to  assign terminal
--- ||| default foreground/background colors to color number  -1.
--- useDefaultColors : IO ()
--- useDefaultColors = return ()
--- 
-||| Initialise the color settings, also sets the screen on the default
-||| colors (white on black)
 startColor : IO ()
 startColor = mkForeign (FFun "start_color" [] FUnit)
-
-hasColors : IO Bool
-hasColors = map idrBool (mkForeign (FFun "has_colors" [] FInt))
 
 initScr : IO Window
 initScr = map MkWindow $ mkForeign (FFun "initscr" [] FPtr)
 
--- ||| Start it all up
--- abstract
--- initCurses : IO ()
--- initCurses = do
---   initScr
---   b <- hasColors
---   when b $ startColor $> useDefaultColors
---   resetParams
-
-||| > The program must call endwin for each terminal being used before
-||| > exiting from curses.
-abstract
 endWin : IO ()
 endWin = mkForeign (FFun "endwin" [] FUnit)
 
-||| get the dimensions of the screen
+||| Returns the size of the standard window.
+|||
+||| The format is `(lines, columns)`.
 abstract
 scrSize : IO (Int, Int)
 scrSize = [| MkPair (mkForeign (FFun "getLines" [] FInt))
                     (mkForeign (FFun "getCols"  [] FInt)) |]
 
-||| refresh curses windows and lines. curs_refresh(3)
+||| Refreshes the screen. It is unlikely that a program needs to manually
+||| call this function.
 abstract
 refresh : IO ()
 refresh = mkForeign (FFun "refresh" [] FUnit)
 
--- public
--- data Pair = MkPair Int
--- 
--- public
--- data Color = MkColor Int
--- 
--- abstract
--- color : String -> Color
--- color "black"   = MkColor 0
--- color "red"     = MkColor 1
--- color "green"   = MkColor 2
--- color "yellow"  = MkColor 3
--- color "blue"    = MkColor 4
--- color "magenta" = MkColor 5
--- color "cyan"    = MkColor 6
--- color "white"   = MkColor 7
--- color _         = MkColor 8
--- 
--- ||| > curses support color attributes  on  terminals  with  that
--- ||| > capability.   To  use  these  routines start_color must be
--- ||| > called, usually right after initscr.   Colors  are  always
--- ||| > used  in pairs (referred to as color-pairs).  A color-pair
--- ||| > consists of a foreground  color  (for  characters)  and  a
--- ||| > background color (for the blank field on which the charac-
--- ||| > ters are displayed).  A programmer  initializes  a  color-
--- ||| > pair  with  the routine init_pair.  After it has been ini-
--- ||| > tialized, COLOR_PAIR(n), a macro  defined  in  <curses.h>,
--- ||| > can be used as a new video attribute.
--- |||
--- ||| > If  a  terminal  is capable of redefining colors, the pro-
--- ||| > grammer can use the routine init_color to change the defi-
--- ||| > nition   of   a   color.
--- |||
--- ||| > The init_pair routine changes the definition of  a  color-
--- ||| > pair.   It takes three arguments: the number of the color-
--- ||| > pair to be changed, the foreground color number,  and  the
--- ||| > background color number.  For portable applications:
--- |||
--- ||| > -  The value of the first argument must be between 1 and
--- ||| >    COLOR_PAIRS-1.
--- |||
--- ||| > -  The value of the second and third arguments  must  be
--- ||| >    between  0  and  COLORS (the 0 color pair is wired to
--- ||| >    white on black and cannot be changed).
-
-abstract
+||| Initializes a color pair.
 initPair : ColorPair -> IO ()
 initPair (MkColorPair natIndex colorFG colorBG) =
   mkForeign (FFun "init_pair" [FInt, FInt, FInt] FUnit) ind fg bg 
@@ -351,110 +279,54 @@ initPair (MkColorPair natIndex colorFG colorBG) =
 setAttr : Int -> IO ()
 setAttr a = mkForeign (FFun "attrset" [FInt] FUnit) a
 
--- colorPair : Int -> IO Int
--- colorPair x = mkForeign (FFun "get_color_pair" [FInt] FInt) x
--- 
--- abstract
--- attrSet : Attr -> Pair -> IO ()
--- attrSet (MkAttr attr) (MkPair p) = do
---   pair <- colorPair p
---   mkForeign (FFun "attrset" [FInt] FUnit) (prim__orInt attr pair)
--- 
--- abstract
--- attr0 : Attr
--- attr0 = MkAttr 0
-
-abstract
-attrOn : Int -> IO ()
-attrOn attr = mkForeign (FFun "attron" [FInt] FUnit) attr
--- 
--- abstract
--- attrOff : Attr -> IO ()
--- attrOff (MkAttr attr) = mkForeign (FFun "attroff" [FInt] FUnit) attr
-
--- ||| bitwise combination of attributes
--- setAttr : Attr -> Attr -> Bool -> Attr
--- setAttr (MkAttr b) (MkAttr a) False = MkAttr $ prim__andInt a $ prim__complInt b
--- setAttr (MkAttr b) (MkAttr a) True  = MkAttr $ prim__orInt  a b
--- 
--- abstract
--- setBold : Attr -> Bool -> Attr
--- setBold = setAttr $ MkAttr 2097152
--- 
--- abstract
--- setReverse : Attr -> Bool -> Attr
--- setReverse = setAttr $ MkAttr 262144
--- 
--- abstract
--- attrPlus : Attr -> Attr -> Attr
--- attrPlus (MkAttr a) (MkAttr b) = MkAttr $ prim__orInt a b
--- 
--- abstract
--- bkgrndSet : Attr -> Pair -> IO ()
--- bkgrndSet (MkAttr a) (MkPair p) = colorPair p >>= \pair => 
---   bkgdset (prim__orInt (ord ' ') (prim__orInt ored pair))
---   where
---     bkgdset : Int -> IO ()
---     bkgdset x = mkForeign (FFun "bkgdset" [FInt] FUnit) x
---     testZero : Int -> Int
---     testZero x = if prim__andInt a x /= 0 then x else 0
---     ored = foldr1 prim__orInt (map testZero (with List [4194304
---                                                        ,524288
---                                                        ,2097152
---                                                        ,1048576
---                                                        ,8388608
---                                                        ,16777216
---                                                        ,262144
---                                                        ,65536
---                                                        ,131072
---                                                        ]))
-
-||| Write a String to the standard screen at current cursor position.
-||| The cursor will be advanced after writing.
-||| @s        The String that will be written
-||| @maxChars Specifies the maximum number of characters that will be printed
+||| Prints a String to the standard screen at current cursor position.
+||| The cursor will be advanced after printing.
+||| @s        the string that will be printed
+||| @maxChars specifies the maximum number of characters that will be printed
 abstract
 addNStr : (s : String) -> (maxChars : Nat) -> IO ()
 addNStr s n = mkForeign (FFun "addnstr" [FString, FInt] FUnit) s (toIntNat n)
 
+||| Prints a String to the standard screen at current cursor position.
+||| The cursor will be advanced after printing.
+||| @s the string that will be printed
 abstract
-addStr : String -> IO ()
+addStr : (s: String) -> IO ()
 addStr s = mkForeign (FFun "addstr" [FString] FUnit) s
 
+||| Prints a character to the standard screen at current cursor position.
+||| The cursor will be advanced after printing.
+||| @c the character that will be printed
 abstract
-addCh : Char -> IO ()
+addCh : (c : Char) -> IO ()
 addCh c = mkForeign (FFun "addch" [FChar] FUnit) c
 
+||| Clears the screen to the end of the line.
 abstract
 clrToEol : IO ()
 clrToEol = mkForeign (FFun "clrtoeol" [] FUnit)
 
-||| >    move the cursor associated with the window
-||| >    to line y and column x.  This routine does  not  move  the
-||| >    physical  cursor  of the terminal until refresh is called.
-||| >    The position specified is relative to the upper  left-hand
-||| >    corner of the window, which is (0,0).
+||| Moves the cursor to the specified coordinates.
+||| @y the line to which the cursor will move (counting starts at 0)
+||| @x the column to which the cursor will move (counting starts at 0)
 abstract
-move : Int -> Int -> IO ()
+move : (y : Int) -> (x : Int) -> IO ()
 move y x = mkForeign (FFun "move" [FInt, FInt] FUnit) y x
 
 curs_set : Int -> IO Int
 curs_set x = mkForeign (FFun "curs_set" [FInt] FInt) x
 
-||| Set the cursor state
-|||
-||| >       The curs_set routine sets  the  cursor  state  is  set  to
-||| >       invisible, normal, or very visible for visibility equal to
-||| >       0, 1, or 2 respectively.  If  the  terminal  supports  the
-||| >       visibility   requested,   the  previous  cursor  state  is
-||| >       returned; otherwise, ERR is returned.
+||| Sets the cursor state. Returns `Nothing`, if the specified cursor state
+||| cannot be set, and `Just` the previous cursor state otherwise.
+||| @cs the cursor state that will be set
 abstract
-cursSet : CurserState -> IO $ Maybe CurserState
-cursSet Invisible = leaveOk True  $> curs_set 0 >>= return . intToCurserState
-cursSet cs = leaveOk False $> curs_set (curserStateToInt cs) >>=
-  return . intToCurserState
+cursSet : (cs : CursorState) -> IO $ Maybe CursorState
+cursSet Invisible = leaveOk True  $> curs_set 0 >>= return . intToCursorState
+cursSet cs = leaveOk False $> curs_set (cursorStateToInt cs) >>=
+  return . intToCursorState
 
-||| Get the current cursor coordinates
+||| Returns the current cursor position.
+||| The format is `(line, column)`.
 abstract
 getYX : IO (Int, Int)
 getYX = do
@@ -462,71 +334,28 @@ getYX = do
   [| MkPair (mkForeign (FFun "getY" [FPtr] FInt) scr)
             (mkForeign (FFun "getX" [FPtr] FInt) scr) |]
 
+||| Returns the highest line and column the cursor can be at.
+||| The format is `(line, column)`.
 abstract
 getMaxYX : IO (Int, Int)
 getMaxYX = scrSize >>= \(row, col) => return (row - 1, col - 1)
 
-||| >      The getch, wgetch, mvgetch and mvwgetch, routines read a
-||| >      character  from the window.
 getch : IO Int
 getch = mkForeign (FFun "getch" [] FInt)
 
--- Some constants for easy symbolic manipulation.
--- NB we don't map keys to an abstract type anymore, as we can't use
--- Alex lexers then.
-
-abstract
-keyDown : Char
-keyDown = chr 258
-
-abstract
-keyUp : Char
-keyUp = chr 259
-
-abstract
-keyLeft : Char
-keyLeft = chr 260
-
-abstract
-keyRight : Char
-keyRight = chr 261
-
-abstract
-keyHome : Char
-keyHome = chr 262
-
-abstract
-keyBackspace : Char
-keyBackspace = chr 263
-
-abstract
-keyNPage : Char
-keyNPage = chr 338
-
-abstract
-keyPPage : Char
-keyPPage = chr 339
-
-abstract
-keyEnd : Char
-keyEnd = chr 360
-
-abstract
-keyResize : Char
-keyResize = chr 410
-
+||| Clears the screen.
 abstract
 clear : IO ()
 clear = mkForeign (FFun "clear" [] FUnit)
 
--- setAttrAndColor : List Attr -> Maybe (Color, Color) -> IO ()
--- setAttrAndColor as c = do
---   initPair $ MkColorPair 1 Red Black
---   attrOn 256
---   addStr "Testing setAttrAndColor"
-
+||| Sets all given attributes and the specified colors.
+||| @attrs  the attributes that will be set
+||| @colors if this is not `Nothing`, the first color of the pair will be set
+|||           as foreground color and the second color of the pair will be set
+|||           as background color
 abstract
-setAttrAndColor : List Attr -> Maybe (Color, Color) -> IO ()
+setAttrAndColor : (attrs : List Attr) -> (colors : Maybe (Color, Color)) ->
+  IO ()
 setAttrAndColor as c = do when (isJust c) $ initPair (colorPair c)
                           setAttr $ combineAttr (256 * cBool (isJust c)) as
   where
@@ -535,6 +364,7 @@ setAttrAndColor as c = do when (isJust c) $ initPair (colorPair c)
     colorPair : Maybe (Color, Color) -> ColorPair
     colorPair (Just (fg, bg)) = MkColorPair 1 fg bg
 
+||| Advances the cursor to the next position, if possible.
 abstract
 moveNextCh : IO ()
 moveNextCh = do
@@ -545,6 +375,7 @@ moveNextCh = do
     else (y, x + 1)
   move newY newX
 
+||| Advances the cursor to the previous position, if possible.
 abstract
 movePrevCh : IO ()
 movePrevCh = do
@@ -555,14 +386,8 @@ movePrevCh = do
     else (y, x - 1)
   move newY newX
 
-||| read a character from the window
-|||
-||| When 'ESC' followed by another key is pressed before the ESC timeout,
-||| that second character is not returned until a third character is
-||| pressed. wtimeout, nodelay and timeout don't appear to change this
-||| behaviour.
-|||
-||| Be warned, getCh will block the whole process without noDelay
+||| Returns `Just` a character, or `Nothing` if the `GetChMode` is `Wait k` and 
+||| the time runs out. See `GetChMode` for more information.
 abstract
 getCh : IO $ Maybe Char
 getCh = do
@@ -572,6 +397,8 @@ getCh = do
     (-1) => return Nothing
     c    => return . return $ chr c
 
+||| Returns a character once the user presses a key. This function is affected
+||| by whether or not the `GetChMode` is a "raw" mode.
 abstract
 forceCh : IO Char
 forceCh = do
@@ -581,6 +408,11 @@ forceCh = do
     (-1) => forceCh
     c    => return $ chr c
 
+||| Returns a `String` the user enters. This function is affected by whether or
+||| not the `GetChMode` is a "raw" mode.
+||| @useEcho  if `True`, the user will see the String they enter
+||| @setEcho  if `True`, echo will be on after the String has been returned,
+|||             otherwise, echo will be off
 abstract
 getStr : (useEcho : Bool) -> (setEcho : Bool) -> IO String
 getStr useEcho setEcho = do
@@ -606,6 +438,7 @@ getStr useEcho setEcho = do
                   getRawStr initY initX $ strTail str
         char                  => getRawStr initY initX $ strCons char str
 
+||| Sets the mode `getCh` will operate in.
 abstract
 setGetChMode : GetChMode -> IO ()
 setGetChMode WaitForever           = raw False $> cBreak True  $> noDelay False
@@ -615,9 +448,15 @@ setGetChMode (Wait (S k))          = halfDelay (toIntNat k)    $> noDelay False
 setGetChMode WaitForeverLinebuf    = raw False $> cBreak False $> noDelay False
 setGetChMode WaitForeverLinebufRaw = raw True  $> cBreak False $> noDelay False
 
-||| Use this function to start curses
+||| Use this function to start curses.
+||| @enableColors whether colors should be enabled or not (note that some
+|||                 terminals may not support colors)
+||| @getChMode    the mode that `getCh` will use
+||| @action       the IO action that curses will run (put all curses actions
+|||                 here) - runCurses will return the result of that action
 abstract
-runCurses : (enableColors : Bool) -> (getChMode : GetChMode) -> IO a -> IO a
+runCurses : (enableColors : Bool) -> (getChMode : GetChMode) ->
+  (action : IO a) -> IO a
 runCurses enableColors getChMode actions = do
   initScr
   when enableColors startColor
