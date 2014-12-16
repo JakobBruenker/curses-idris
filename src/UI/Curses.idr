@@ -294,7 +294,7 @@ initPair (MkColorPair natIndex colorFG colorBG) =
 setAttr : Int -> IO ()
 setAttr a = mkForeign (FFun "attrset" [FInt] FUnit) a
 
-||| Prints a String to the standard screen at current cursor position.
+||| Prints a `String` to the standard screen at current cursor position.
 ||| The cursor will be advanced after printing.
 ||| @s        the string that will be printed
 ||| @maxChars specifies the maximum number of characters that will be printed
@@ -302,7 +302,7 @@ abstract
 addNStr : (s : String) -> (maxChars : Nat) -> IO ()
 addNStr s n = mkForeign (FFun "addnstr" [FString, FInt] FUnit) s (toIntNat n)
 
-||| Prints a String to the standard screen at current cursor position.
+||| Prints a `String` to the standard screen at current cursor position.
 ||| The cursor will be advanced after printing.
 ||| @s the string that will be printed
 abstract
@@ -390,79 +390,84 @@ setAttrAndColor as c = do
     colorAttr : IO Int
     colorAttr = maybe (return 0) (colorPair . intIndex) c
 
-||| Advances the cursor to the next position, if possible.
+||| Advances the cursor to the next position, if possible. Returns `True` if
+||| cursor was moved, `False` otherwise.
 abstract
-moveNextCh : IO ()
+moveNextCh : IO Bool
 moveNextCh = do
   (maxY, maxX) <- getMaxYX
   (y, x) <- getYX
-  let (newY, newX) = if x >= maxX
-    then if y >= maxY then (maxY, maxX) else (y + 1, 0)
-    else (y, x + 1)
+  let (newY, newX, success) = if x >= maxX
+    then if y >= maxY then (maxY, maxX, False) else (y + 1, 0, True)
+    else (y, x + 1, True)
   move newY newX
+  return success
 
-||| Advances the cursor to the previous position, if possible.
+||| Moves the cursor to the previous position, if possible. Returns `True` if
+||| cursor was moved, `False` otherwise.
 abstract
-movePrevCh : IO ()
+movePrevCh : IO Bool
 movePrevCh = do
   (maxY, maxX) <- getMaxYX
   (y, x) <- getYX
-  let (newY, newX) = if x <= 0
-    then if y <= 0 then (0, 0) else (y - 1, maxX)
-    else (y, x - 1)
+  let (newY, newX, success) = if x <= 0
+    then if y <= 0 then (0, 0, False) else (y - 1, maxX, True)
+    else (y, x - 1, True)
   move newY newX
+  return success
 
 ||| Returns `Just` a character, or `Nothing` if the `GetChMode` is `Wait k` and 
 ||| the time runs out. See `GetChMode` for more information.
 abstract
 getCh : IO $ Maybe Char
-getCh = do
-  refresh
-  v <- getch
-  case v of
-    (-1) => return Nothing
-    c    => return . return $ chr c
+getCh = refresh $> case !getch of
+  (-1) => return Nothing
+  c    => return . return $ chr c
 
 ||| Returns a character once the user presses a key. This function is affected
 ||| by whether or not the `GetChMode` is a "raw" mode.
 abstract
 forceCh : IO Char
-forceCh = do
-  refresh
-  v <- getch
-  case v of
-    (-1) => forceCh
-    c    => return $ chr c
+forceCh = refresh $> case !getch of
+  (-1) => forceCh
+  c    => return $ chr c
 
 ||| Returns a `String` the user enters. This function is affected by whether or
 ||| not the `GetChMode` is a "raw" mode.
-||| @useEcho  if `True`, the user will see the String they enter
-||| @setEcho  if `True`, echo will be on after the String has been returned,
+||| @useEcho  if `True`, the user will see the `String` they enter
+||| @setEcho  if `True`, echo will be on after the `String` has been returned,
 |||             otherwise, echo will be off
 abstract
 getStr : (useEcho : Bool) -> (setEcho : Bool) -> IO String
 getStr useEcho setEcho = do
     echo useEcho
     (y, x) <- getYX
-    (maxY, maxX) <- scrSize
     str <- map reverse $ getRawStr y x ""
     echo setEcho
     return str
   where
+    mayMovePrev : IO Bool
+    mayMovePrev = if useEcho then movePrevCh else return False
+    mayMoveNext : IO Bool
+    mayMoveNext = if useEcho then moveNextCh else return False
+    mayMove : Int -> Int -> IO ()
+    mayMove y x = when useEcho $ move y x
+    mayAddCh : Char -> IO ()
+    mayAddCh c = when useEcho $ addCh c
     getRawStr : Int -> Int -> String -> IO String
     getRawStr initY initX str = do
       (preY, preX) <- getYX
       c <- forceCh
       (y, x) <- getYX
       case c of
-        specialChar Enter     => move preY preX $> return str
+        specialChar Enter     => mayMove preY preX $> return str
         specialChar Backspace => if y <= initY && x < initX
-          then move preY preX $> getRawStr initY initX str
+          then mayMove preY preX $> getRawStr initY initX str
           else do if (preY, preX) == (y, x)
-                    then movePrevCh $> addStr " " $> movePrevCh
-                    else addStr " " $> move y x
+                    then mayMovePrev $> mayAddCh ' ' $> mayMovePrev $> return ()
+                    else mayAddCh ' ' $> mayMove y x
                   getRawStr initY initX $ strTail str
-        char                  => getRawStr initY initX $ strCons char str
+        char => getRawStr initY initX $ strCons char str
 
 ||| Sets the mode `getCh` will operate in.
 abstract
