@@ -1,7 +1,7 @@
 #ifndef RUNCURSES_H
 #define RUNCURSES_H
 
-#include <ncurses.h>
+#include <curses.h>
 
 WINDOW * stdScr();
 int getLines();
