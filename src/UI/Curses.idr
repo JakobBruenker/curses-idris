@@ -38,7 +38,7 @@ data GetChMode : Type where
 
 ||| These are the color that are defined once curses is initialized.
 |||
-||| Note that some terminals may display these colors differently.
+||| Note that some terminals may display some colors differently.
 public
 data Color = Black
            | Red
@@ -49,7 +49,8 @@ data Color = Black
            | Cyan
            | White
 
-||| This is used to give a foreground and a background color to `init_pair`.
+||| This is necessary to use colors.
+public
 data ColorPair : Type where
   ||| Use this constructor to make a ColorPair.
   ||| @i index of the ColorPair
@@ -241,12 +242,26 @@ raw : Bool -> IO ()
 raw True  = mkForeign (FFun "raw"   [] FUnit)
 raw False = mkForeign (FFun "noraw" [] FUnit)
 
+||| Return `True` if the terminal supports colors, false otherwise. This
+||| function may not return correct results if `startCurses` has not been
+||| called.
+abstract
+hasColors : IO Bool
+hasColors = map idrBool $ mkForeign (FFun "has_colors" [] FInt)
+
+||| This function must be called before colors can be used. Note that not all
+||| terminals support colors. Use `hasColors` to find out whether the terminal
+||| the program runs on supports colors.
+abstract
 startColor : IO ()
 startColor = mkForeign (FFun "start_color" [] FUnit)
 
 initScr : IO Window
 initScr = map MkWindow $ mkForeign (FFun "initscr" [] FPtr)
 
+||| Terminates curses. This should *always* be called before the program
+||| terminates.
+abstract
 endWin : IO ()
 endWin = mkForeign (FFun "endwin" [] FUnit)
 
@@ -267,10 +282,10 @@ refresh = mkForeign (FFun "refresh" [] FUnit)
 ||| Initializes a color pair.
 initPair : ColorPair -> IO ()
 initPair (MkColorPair natIndex colorFG colorBG) =
-  mkForeign (FFun "init_pair" [FInt, FInt, FInt] FUnit) ind fg bg 
+  mkForeign (FFun "init_pair" [FInt, FInt, FInt] FUnit) (i + 1) fg bg 
   where
-    ind : Int
-    ind = toIntNat natIndex
+    i : Int
+    i = toIntNat natIndex
     fg  : Int
     fg  = colorToInt colorFG
     bg  : Int
@@ -348,21 +363,32 @@ abstract
 clear : IO ()
 clear = mkForeign (FFun "clear" [] FUnit)
 
-||| Sets all given attributes and the specified colors.
+colorPair : Int -> IO Int
+colorPair i = mkForeign (FFun "COLOR_PAIR" [FInt] FInt) (i + 1)
+
+||| Sets all given attributes and the specified colors. Note this function
+||| will not affect colors unless the terminal supports colors (which you can
+||| check with `hasColors`) and `startColors` has been called.
 ||| @attrs  the attributes that will be set
-||| @colors if this is not `Nothing`, the first color of the pair will be set
-|||           as foreground color and the second color of the pair will be set
-|||           as background color
+||| @colors if this is `Nothing`, the default colors will be used, which are
+|||           usually white on black; if this is not `Nothing`, the specified
+|||           Pair will be initialized and used - note that if characters on the
+|||           screen use the pair with index *i*, and the pair with index *i* is
+|||           then reinitialized with different colors, the characters that are
+|||           already on the screen will change their color
 abstract
-setAttrAndColor : (attrs : List Attr) -> (colors : Maybe (Color, Color)) ->
-  IO ()
-setAttrAndColor as c = do when (isJust c) $ initPair (colorPair c)
-                          setAttr $ combineAttr (256 * cBool (isJust c)) as
+setAttrAndColor : (attrs : List Attr) -> (colors : Maybe ColorPair) -> IO ()
+setAttrAndColor as c = do
+    for_ c initPair
+    col <- colorAttr
+    setAttr $ combineAttr col as
   where
     combineAttr : Int -> List Attr -> Int
     combineAttr col = foldr prim__orInt col . map attrToInt
-    colorPair : Maybe (Color, Color) -> ColorPair
-    colorPair (Just (fg, bg)) = MkColorPair 1 fg bg
+    intIndex : ColorPair -> Int
+    intIndex (MkColorPair i _ _) = toIntNat i
+    colorAttr : IO Int
+    colorAttr = maybe (return 0) (colorPair . intIndex) c
 
 ||| Advances the cursor to the next position, if possible.
 abstract
@@ -448,24 +474,16 @@ setGetChMode (Wait (S k))          = halfDelay (toIntNat k)    $> noDelay False
 setGetChMode WaitForeverLinebuf    = raw False $> cBreak False $> noDelay False
 setGetChMode WaitForeverLinebufRaw = raw True  $> cBreak False $> noDelay False
 
-||| Use this function to run curses.
-||| @enableColors whether colors should be enabled or not (note that some
-|||                 terminals may not support colors)
+||| Use this function to start curses. Note that `endWin` should *always* be
+||| called before the program terminates.
 ||| @getChMode    the mode that `getCh` will use
-||| @actions      the IO actions that curses will run, `runCurses` will return
-|||                 the result of these actions
 abstract
-runCurses : (enableColors : Bool) -> (getChMode : GetChMode) ->
-  (actions : IO a) -> IO a
-runCurses enableColors getChMode actions = do
+startCurses : (getChMode : GetChMode) -> IO ()
+startCurses getChMode = do
   initScr
-  when enableColors startColor
   nl True
   echo False
   keypad True
   meta True
   leaveOk False
   setGetChMode getChMode
-  result <- actions
-  endWin
-  return result
