@@ -1,4 +1,4 @@
-module Curses
+module UI.Curses
 
 %include C "curses.h"
 %include C "cursesrun.h"
