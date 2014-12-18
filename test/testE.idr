@@ -10,7 +10,7 @@ test : { [CURSES Pre] ==> [CURSES Post] } Eff ()
 test = do start WaitForever
           addStr "Welcome to testE\nPress any key to continue"
           forceCh
-          True <- startColor | False => end -- noColor
+          True <- startColor | False => noColor
           setAttrAndColor [Bold, Underline] $ Just (MkColorPair 1 Red Blue)
           clear
           (lin, _) <- scrSize
