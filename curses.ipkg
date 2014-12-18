@@ -1,7 +1,8 @@
 package curses
 
 sourcedir = src
-modules = UI.Curses
+modules = UI.Curses, Effect.Curses
+opts = "-p effects"
 
 makefile = MakefileCursesC
 

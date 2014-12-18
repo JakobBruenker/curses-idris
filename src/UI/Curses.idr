@@ -192,6 +192,9 @@ cBool False = 0
 idrBool : Int -> Bool
 idrBool = (/= 0)
 
+errOkToBool : Int -> Bool
+errOkToBool = (/= (-1))
+
 ||| Returns the standard window.
 stdScr : IO Window
 stdScr = map MkWindow $ mkForeign (FFun "stdScr" [] FPtr)
@@ -322,11 +325,12 @@ clrToEol : IO ()
 clrToEol = mkForeign (FFun "clrtoeol" [] FUnit)
 
 ||| Moves the cursor to the specified coordinates.
+||| Returns `True` if the cursor was moved, `False` otherwise.
 ||| @y the line to which the cursor will move (counting starts at 0)
 ||| @x the column to which the cursor will move (counting starts at 0)
 abstract
-move : (y : Int) -> (x : Int) -> IO ()
-move y x = mkForeign (FFun "move" [FInt, FInt] FUnit) y x
+move : (y : Int) -> (x : Int) -> IO Bool
+move y x = map errOkToBool $ mkForeign (FFun "move" [FInt, FInt] FInt) y x
 
 curs_set : Int -> IO Int
 curs_set x = mkForeign (FFun "curs_set" [FInt] FInt) x
@@ -450,10 +454,13 @@ getStr useEcho setEcho = do
     mayMovePrev = if useEcho then movePrevCh else return False
     mayMoveNext : IO Bool
     mayMoveNext = if useEcho then moveNextCh else return False
-    mayMove : Int -> Int -> IO ()
-    mayMove y x = when useEcho $ move y x
+    mayMove : Int -> Int -> IO Bool
+    mayMove y x = if useEcho then move y x else return False
     mayAddCh : Char -> IO ()
     mayAddCh c = when useEcho $ addCh c
+    safeTail : List a -> List a
+    safeTail [] = []
+    safeTail (_ :: xs) = xs
     getRawStr : Int -> Int -> String -> IO String
     getRawStr initY initX str = do
       (preY, preX) <- getYX
@@ -465,8 +472,8 @@ getStr useEcho setEcho = do
           then mayMove preY preX $> getRawStr initY initX str
           else do if (preY, preX) == (y, x)
                     then mayMovePrev $> mayAddCh ' ' $> mayMovePrev $> return ()
-                    else mayAddCh ' ' $> mayMove y x
-                  getRawStr initY initX $ strTail str
+                    else mayAddCh ' ' $> mayMove y x $> return ()
+                  getRawStr initY initX . pack . safeTail . unpack $ str
         char => getRawStr initY initX $ strCons char str
 
 ||| Sets the mode `getCh` will operate in.
