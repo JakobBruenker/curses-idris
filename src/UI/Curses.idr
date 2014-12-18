@@ -207,8 +207,8 @@ noDelay bf = do
 halfDelay : Int -> IO ()
 halfDelay delay = mkForeign (FFun "halfdelay" [FInt] FUnit) delay
 
-||| Enables or disables the reading of function keys, arrow keys, and so
-||| on.
+||| Enables or disables the reading of function keys, arrow keys, and so on.
+||| This is turned on by default.
 ||| @bf  if `True`, enables reading, if `False`, disables it
 abstract
 keypad : (bf : Bool) -> IO ()
@@ -232,8 +232,9 @@ nl False = mkForeign (FFun "nonl" [] FUnit)
 
 ||| `echo` determines whether a character will be printed when the user presses
 ||| a key
+||| @bf whether or not the echo will be on
 abstract
-echo : Bool -> IO ()
+echo : (bf : Bool) -> IO ()
 echo False = mkForeign (FFun "noecho" [] FUnit)
 echo True  = mkForeign (FFun "echo"   [] FUnit)
 
@@ -252,12 +253,18 @@ abstract
 hasColors : IO Bool
 hasColors = map idrBool $ mkForeign (FFun "has_colors" [] FInt)
 
+||| Refreshes the screen. It is unlikely that a program needs to manually
+||| call this function.
+abstract
+refresh : IO ()
+refresh = mkForeign (FFun "refresh" [] FUnit)
+
 ||| This function must be called before colors can be used. Note that not all
 ||| terminals support colors. Use `hasColors` to find out whether the terminal
 ||| the program runs on supports colors.
 abstract
 startColor : IO ()
-startColor = mkForeign (FFun "start_color" [] FUnit)
+startColor = refresh $> mkForeign (FFun "start_color" [] FUnit)
 
 initScr : IO Window
 initScr = map MkWindow $ mkForeign (FFun "initscr" [] FPtr)
@@ -275,12 +282,6 @@ abstract
 scrSize : IO (Int, Int)
 scrSize = [| MkPair (mkForeign (FFun "getLines" [] FInt))
                     (mkForeign (FFun "getCols"  [] FInt)) |]
-
-||| Refreshes the screen. It is unlikely that a program needs to manually
-||| call this function.
-abstract
-refresh : IO ()
-refresh = mkForeign (FFun "refresh" [] FUnit)
 
 ||| Initializes a color pair.
 initPair : ColorPair -> IO ()
@@ -370,7 +371,7 @@ clear = mkForeign (FFun "clear" [] FUnit)
 colorPair : Int -> IO Int
 colorPair i = mkForeign (FFun "COLOR_PAIR" [FInt] FInt) (i + 1)
 
-||| Sets all given attributes and the specified colors. Note this function
+||| Sets all given attributes and the specified colors. Note that this function
 ||| will not affect colors unless the terminal supports colors (which you can
 ||| check with `hasColors`) and `startColors` has been called.
 ||| @attrs  the attributes that will be set
@@ -383,6 +384,7 @@ colorPair i = mkForeign (FFun "COLOR_PAIR" [FInt] FInt) (i + 1)
 abstract
 setAttrAndColor : (attrs : List Attr) -> (colors : Maybe ColorPair) -> IO ()
 setAttrAndColor as c = do
+    refresh
     for_ c initPair
     col <- colorAttr
     setAttr $ combineAttr col as
@@ -429,7 +431,7 @@ getCh = refresh $> case !getch of
   c    => return . return $ chr c
 
 ||| Returns a character once the user presses a key. This function is affected
-||| by whether or not the `GetChMode` is a "raw" mode.
+||| by whether or not the `GetChMode` is a "raw" or a "linebuf" mode.
 abstract
 forceCh : IO Char
 forceCh = refresh $> case !getch of

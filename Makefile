@@ -1,3 +1,6 @@
+build:
+	idris --build curses.ipkg
+
 install:
 	idris --install curses.ipkg
 

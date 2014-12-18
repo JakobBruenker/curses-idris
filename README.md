@@ -10,9 +10,3 @@ To install, simply run
 ```
 make install
 ```
-
-To uninstall, run
-
-```
-make clean
-```
