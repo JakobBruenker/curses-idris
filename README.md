@@ -1,7 +1,7 @@
 curses-idris
 ============
 
-A simple Idris binding to the Curses library.
+Curses bindings package for Idris
 
 #Installation
 
