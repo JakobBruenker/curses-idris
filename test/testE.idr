@@ -1,5 +1,5 @@
 -- Prints out some things, tries using color, and asks the user something.
--- compile with `idris -p effects -p curses -o testE testE.idr
+-- compile with `idris -p effects -p curses -o testE testE.idr`
 
 module Main
 
@@ -9,14 +9,14 @@ import Effect.Curses
 test : { [CURSES Pre] ==> [CURSES Post] } Eff ()
 test = do start WaitForever
           addStr "Welcome to testE\nPress any key to continue"
-          forceCh
+          getCh
           True <- startColor | False => noColor
           setAttrAndColor [Bold, Underline] $ Just (MkColorPair 1 Red Blue)
           clear
           (lin, _) <- scrSize
           move (lin `div` 2) 0
           addStr "This is colorful text with some attributes."
-          forceCh
+          getCh
           setAttrAndColor [] Nothing
           loop
           end
