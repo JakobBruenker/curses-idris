@@ -11,8 +11,8 @@ data Pre : Type where
   MkPre : Pre
 
 ||| When the `CURSES` effect has this resource, the curses functions can be
-||| called. Note that a `CURSES` effect should only be `run` if the type does
-||| not contain the `Active` resource.
+||| called. Note that a `CURSES` effect should only be `run` if the type
+||| signature does not contain the `Active` resource.
 data Active : (colorEnabled : Bool) -> Type where
   MkActive : Active colorEnabled
 
