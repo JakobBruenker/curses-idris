@@ -426,17 +426,19 @@ movePrevCh = do
 ||| the time runs out. See `GetChMode` for more information.
 abstract
 getCh : IO $ Maybe Char
-getCh = refresh $> case !getch of
-  (-1) => return Nothing
-  c    => return . return $ chr c
+getCh = do
+  refresh
+  c <- getch
+  return $ if c == (-1) then Nothing else return $ chr c 
 
 ||| Returns a character once the user presses a key. This function is affected
 ||| by whether or not the `GetChMode` is a "raw" or a "linebuf" mode.
 abstract
 forceCh : IO Char
-forceCh = refresh $> case !getch of
-  (-1) => forceCh
-  c    => return $ chr c
+forceCh = do
+  refresh
+  c <- getch
+  if c == (-1) then forceCh else return $ chr c
 
 ||| Returns a `String` the user enters. This function is affected by whether or
 ||| not the `GetChMode` is a "raw" mode.
@@ -469,8 +471,8 @@ getStr useEcho setEcho = do
       c <- forceCh
       (y, x) <- getYX
       case c of
-        specialChar Enter     => mayMove preY preX $> return str
-        specialChar Backspace => if y <= initY && x < initX
+        '\n'   => mayMove preY preX $> return str
+        '\263' => if y <= initY && x < initX
           then mayMove preY preX $> getRawStr initY initX str
           else do if (preY, preX) == (y, x)
                     then mayMovePrev $> mayAddCh ' ' $> mayMovePrev $> return ()
