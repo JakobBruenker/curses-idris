@@ -197,15 +197,15 @@ errOkToBool = (/= (-1))
 
 ||| Returns the standard window.
 stdScr : IO Window
-stdScr = map MkWindow $ mkForeign (FFun "stdScr" [] FPtr)
+stdScr = map MkWindow $ foreign FFI_C "stdScr" (IO Ptr)
 
 noDelay : Bool -> IO ()
 noDelay bf = do
   (MkWindow scr) <- stdScr
-  mkForeign (FFun "nodelay" [FPtr, FInt] FUnit) scr (cBool bf)
+  foreign FFI_C "nodelay" (Ptr -> Int -> IO ()) scr (cBool bf)
 
 halfDelay : Int -> IO ()
-halfDelay delay = mkForeign (FFun "halfdelay" [FInt] FUnit) delay
+halfDelay delay = foreign FFI_C "halfdelay" (Int -> IO ()) delay
 
 ||| Enables or disables the reading of function keys, arrow keys, and so on.
 ||| This is turned on by default.
@@ -214,79 +214,79 @@ abstract
 keypad : (bf : Bool) -> IO ()
 keypad bf = do
   (MkWindow scr) <- stdScr
-  mkForeign (FFun "keypad" [FPtr, FInt] FUnit) scr (cBool bf)
+  foreign FFI_C "keypad" (Ptr -> Int -> IO ()) scr (cBool bf)
 
 meta : Bool -> IO ()
 meta bf = do
   (MkWindow scr) <- stdScr
-  mkForeign (FFun "meta" [FPtr, FInt] FUnit) scr (cBool bf)
+  foreign FFI_C "meta" (Ptr -> Int -> IO ()) scr (cBool bf)
 
 leaveOk : Bool -> IO Int
 leaveOk bf = do
   (MkWindow scr) <- stdScr
-  mkForeign (FFun "leaveok" [FPtr, FInt] FInt) scr (cBool bf)
+  foreign FFI_C "leaveok" (Ptr -> Int -> IO Int) scr (cBool bf)
 
 nl : Bool -> IO ()
-nl True  = mkForeign (FFun "nl"   [] FUnit)
-nl False = mkForeign (FFun "nonl" [] FUnit)
+nl True  = foreign FFI_C "nl"   (IO ())
+nl False = foreign FFI_C "nonl" (IO ())
 
 ||| `echo` determines whether a character will be printed when the user presses
 ||| a key
 ||| @bf whether or not the echo will be on
 abstract
 echo : (bf : Bool) -> IO ()
-echo False = mkForeign (FFun "noecho" [] FUnit)
-echo True  = mkForeign (FFun "echo"   [] FUnit)
+echo False = foreign FFI_C "noecho" (IO ())
+echo True  = foreign FFI_C "echo"   (IO ())
 
 cBreak : Bool -> IO ()
-cBreak True  = mkForeign (FFun "cbreak"   [] FUnit)
-cBreak False = mkForeign (FFun "nocbreak" [] FUnit)
+cBreak True  = foreign FFI_C "cbreak"   (IO ())
+cBreak False = foreign FFI_C "nocbreak" (IO ())
 
 raw : Bool -> IO ()
-raw True  = mkForeign (FFun "raw"   [] FUnit)
-raw False = mkForeign (FFun "noraw" [] FUnit)
+raw True  = foreign FFI_C "raw"   (IO ())
+raw False = foreign FFI_C "noraw" (IO ())
 
 ||| Return `True` if the terminal supports colors, false otherwise. This
 ||| function may not return correct results if `startCurses` has not been
 ||| called.
 abstract
 hasColors : IO Bool
-hasColors = map idrBool $ mkForeign (FFun "has_colors" [] FInt)
+hasColors = map idrBool $ foreign FFI_C "has_colors" (IO Int)
 
 ||| Refreshes the screen. It is unlikely that a program needs to manually
 ||| call this function.
 abstract
 refresh : IO ()
-refresh = mkForeign (FFun "refresh" [] FUnit)
+refresh = foreign FFI_C "refresh" (IO ())
 
 ||| This function must be called before colors can be used. Note that not all
 ||| terminals support colors. Use `hasColors` to find out whether the terminal
 ||| the program runs on supports colors.
 abstract
 startColor : IO ()
-startColor = refresh $> mkForeign (FFun "start_color" [] FUnit)
+startColor = refresh *> foreign FFI_C "start_color" (IO ())
 
 initScr : IO Window
-initScr = map MkWindow $ mkForeign (FFun "initscr" [] FPtr)
+initScr = map MkWindow $ foreign FFI_C "initscr" (IO Ptr)
 
 ||| Terminates curses. This should *always* be called before the program
 ||| terminates.
 abstract
 endWin : IO ()
-endWin = mkForeign (FFun "endwin" [] FUnit)
+endWin = foreign FFI_C "endwin" (IO ())
 
 ||| Returns the size of the standard window.
 |||
 ||| The format is `(lines, columns)`.
 abstract
 scrSize : IO (Int, Int)
-scrSize = [| MkPair (mkForeign (FFun "getLines" [] FInt))
-                    (mkForeign (FFun "getCols"  [] FInt)) |]
+scrSize = [| MkPair (foreign FFI_C "getLines" (IO Int))
+                    (foreign FFI_C "getCols"  (IO Int)) |]
 
 ||| Initializes a color pair.
 initPair : ColorPair -> IO ()
 initPair (MkColorPair natIndex colorFG colorBG) =
-  mkForeign (FFun "init_pair" [FInt, FInt, FInt] FUnit) (i + 1) fg bg 
+  foreign FFI_C "init_pair" (Int -> Int -> Int -> IO ()) (i + 1) fg bg 
   where
     i : Int
     i = toIntNat natIndex
@@ -296,7 +296,7 @@ initPair (MkColorPair natIndex colorFG colorBG) =
     bg  = colorToInt colorBG
 
 setAttr : Int -> IO ()
-setAttr a = mkForeign (FFun "attrset" [FInt] FUnit) a
+setAttr a = foreign FFI_C "attrset" (Int -> IO ()) a
 
 ||| Prints a `String` to the standard screen at current cursor position.
 ||| The cursor will be advanced after printing.
@@ -304,26 +304,26 @@ setAttr a = mkForeign (FFun "attrset" [FInt] FUnit) a
 ||| @maxChars specifies the maximum number of characters that will be printed
 abstract
 addNStr : (s : String) -> (maxChars : Nat) -> IO ()
-addNStr s n = mkForeign (FFun "addnstr" [FString, FInt] FUnit) s (toIntNat n)
+addNStr s n = foreign FFI_C "addnstr" (String -> Int -> IO ()) s (toIntNat n)
 
 ||| Prints a `String` to the standard screen at current cursor position.
 ||| The cursor will be advanced after printing.
 ||| @s the string that will be printed
 abstract
 addStr : (s: String) -> IO ()
-addStr s = mkForeign (FFun "addstr" [FString] FUnit) s
+addStr s = foreign FFI_C "addstr" (String -> IO ()) s
 
 ||| Prints a character to the standard screen at current cursor position.
 ||| The cursor will be advanced after printing.
 ||| @c the character that will be printed
 abstract
 addCh : (c : Char) -> IO ()
-addCh c = mkForeign (FFun "addch" [FChar] FUnit) c
+addCh c = foreign FFI_C "addch" (Char -> IO ()) c
 
 ||| Clears the screen to the end of the line.
 abstract
 clrToEol : IO ()
-clrToEol = mkForeign (FFun "clrtoeol" [] FUnit)
+clrToEol = foreign FFI_C "clrtoeol" (IO ())
 
 ||| Moves the cursor to the specified coordinates.
 ||| Returns `True` if the cursor was moved, `False` otherwise.
@@ -331,18 +331,18 @@ clrToEol = mkForeign (FFun "clrtoeol" [] FUnit)
 ||| @x the column to which the cursor will move (counting starts at 0)
 abstract
 move : (y : Int) -> (x : Int) -> IO Bool
-move y x = map errOkToBool $ mkForeign (FFun "move" [FInt, FInt] FInt) y x
+move y x = map errOkToBool $ foreign FFI_C "move" (Int -> Int -> IO Int) y x
 
 curs_set : Int -> IO Int
-curs_set x = mkForeign (FFun "curs_set" [FInt] FInt) x
+curs_set x = foreign FFI_C "curs_set" (Int -> IO Int) x
 
 ||| Sets the cursor state. Returns `Nothing`, if the specified cursor state
 ||| cannot be set, and `Just` the previous cursor state otherwise.
 ||| @cs the cursor state that will be set
 abstract
 cursSet : (cs : CursorState) -> IO $ Maybe CursorState
-cursSet Invisible = leaveOk True  $> curs_set 0 >>= return . intToCursorState
-cursSet cs = leaveOk False $> curs_set (cursorStateToInt cs) >>=
+cursSet Invisible = leaveOk True  *> curs_set 0 >>= return . intToCursorState
+cursSet cs = leaveOk False *> curs_set (cursorStateToInt cs) >>=
   return . intToCursorState
 
 ||| Returns the current cursor position.
@@ -351,8 +351,8 @@ abstract
 getYX : IO (Int, Int)
 getYX = do
   (MkWindow scr) <- stdScr
-  [| MkPair (mkForeign (FFun "getY" [FPtr] FInt) scr)
-            (mkForeign (FFun "getX" [FPtr] FInt) scr) |]
+  [| MkPair (foreign FFI_C "getY" (Ptr -> IO Int) scr)
+            (foreign FFI_C "getX" (Ptr -> IO Int) scr) |]
 
 ||| Returns the highest line and column the cursor can be at.
 ||| The format is `(line, column)`.
@@ -361,15 +361,15 @@ getMaxYX : IO (Int, Int)
 getMaxYX = scrSize >>= \(row, col) => return (row - 1, col - 1)
 
 getch : IO Int
-getch = mkForeign (FFun "getch" [] FInt)
+getch = foreign FFI_C "getch" (IO Int)
 
 ||| Clears the screen.
 abstract
 clear : IO ()
-clear = mkForeign (FFun "clear" [] FUnit)
+clear = foreign FFI_C "clear" (IO ())
 
 colorPair : Int -> IO Int
-colorPair i = mkForeign (FFun "COLOR_PAIR" [FInt] FInt) (i + 1)
+colorPair i = foreign FFI_C "COLOR_PAIR" (Int -> IO Int) (i + 1)
 
 ||| Sets all given attributes and the specified colors. Note that this function
 ||| will not affect colors unless the terminal supports colors (which you can
@@ -471,24 +471,24 @@ getStr useEcho setEcho = do
       c <- forceCh
       (y, x) <- getYX
       case c of
-        '\n'   => mayMove preY preX $> return str
+        '\n'   => mayMove preY preX *> return str
         '\263' => if y <= initY && x < initX
-          then mayMove preY preX $> getRawStr initY initX str
+          then mayMove preY preX *> getRawStr initY initX str
           else do if (preY, preX) == (y, x)
-                    then mayMovePrev $> mayAddCh ' ' $> mayMovePrev $> return ()
-                    else mayAddCh ' ' $> mayMove y x $> return ()
+                    then mayMovePrev *> mayAddCh ' ' *> mayMovePrev *> return ()
+                    else mayAddCh ' ' *> mayMove y x *> return ()
                   getRawStr initY initX . pack . safeTail . unpack $ str
         char => getRawStr initY initX $ strCons char str
 
 ||| Sets the mode `getCh` will operate in.
 abstract
 setGetChMode : GetChMode -> IO ()
-setGetChMode WaitForever           = raw False $> cBreak True  $> noDelay False
-setGetChMode WaitForeverRaw        = raw True                  $> noDelay False
-setGetChMode (Wait Z)              = raw False $> cBreak True  $> noDelay True
-setGetChMode (Wait (S k))          = halfDelay (toIntNat k)    $> noDelay False
-setGetChMode WaitForeverLinebuf    = raw False $> cBreak False $> noDelay False
-setGetChMode WaitForeverLinebufRaw = raw True  $> cBreak False $> noDelay False
+setGetChMode WaitForever           = raw False *> cBreak True  *> noDelay False
+setGetChMode WaitForeverRaw        = raw True                  *> noDelay False
+setGetChMode (Wait Z)              = raw False *> cBreak True  *> noDelay True
+setGetChMode (Wait (S k))          = halfDelay (toIntNat k)    *> noDelay False
+setGetChMode WaitForeverLinebuf    = raw False *> cBreak False *> noDelay False
+setGetChMode WaitForeverLinebufRaw = raw True  *> cBreak False *> noDelay False
 
 ||| Use this function to start curses. Note that `endWin` should *always* be
 ||| called before the program terminates.

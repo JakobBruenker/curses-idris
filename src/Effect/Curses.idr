@@ -29,10 +29,7 @@ data Curses : Effect where
   Start : GetChMode ->  { Pre      ==> Active False } Curses ()
   End   :               { Active c ==> Post         } Curses ()
 
-  StartColor :  { Active False ==> {success} Active $ if success
-                                                        then True
-                                                        else False
-                } Curses Bool
+  StartColor :  { Active False ==> {success} Active $ success } Curses Bool
 
   MovePrevCh    :                   { Active c } Curses Bool
   MoveNextCh    :                   { Active c } Curses Bool
@@ -59,8 +56,8 @@ data Curses : Effect where
                       { Active True } Curses ()
 
 instance Handler Curses IO where
-  handle _ (Start gcm) k = startCurses gcm  $> k () MkActive
-  handle _ End         k = endWin           $> k () MkPost
+  handle _ (Start gcm) k = startCurses gcm  *> k () MkActive
+  handle _ End         k = endWin           *> k () MkPost
 
   handle _ StartColor k = do success <- hasColors
                              startColor
@@ -71,27 +68,27 @@ instance Handler Curses IO where
   handle m MoveNextCh k = moveNextCh >>= \success => k success m
   handle m (Move y x) k = move y x   >>= \success => k success m
 
-  handle m (SetGetChMode gcm)  k = setGetChMode gcm $>              k ()      m
+  handle m (SetGetChMode gcm)  k = setGetChMode gcm *>              k ()      m
   handle m ScrSize             k = scrSize          >>= \dims   =>  k dims    m
-  handle m Refresh             k = refresh          $>              k ()      m
-  handle m (Keypad bf)         k = keypad   bf      $>              k ()      m
+  handle m Refresh             k = refresh          *>              k ()      m
+  handle m (Keypad bf)         k = keypad   bf      *>              k ()      m
   handle m GetYX               k = getYX            >>= \coords =>  k coords  m
   handle m GetMaxYX            k = getMaxYX         >>= \maxYX  =>  k maxYX   m
   handle m (GetStr ue se)      k = getStr   ue  se  >>= \str    =>  k str     m
   handle m GetCh               k = getCh            >>= \mc     =>  k mc      m
   handle m ForceCh             k = forceCh          >>= \c      =>  k c       m
-  handle m (Echo bf)           k = echo bf          $>              k ()      m
+  handle m (Echo bf)           k = echo bf          *>              k ()      m
   handle m (CursSet cs)        k = cursSet  cs      >>= \mcs    =>  k mcs     m
-  handle m ClrToEol            k = clrToEol         $>              k ()      m
-  handle m Clear               k = clear            $>              k ()      m
-  handle m (AddStr str)        k = addStr   str     $>              k ()      m
-  handle m (AddNStr str n)     k = addNStr  str n   $>              k ()      m
-  handle m (AddCh c)           k = addCh    c       $>              k ()      m
+  handle m ClrToEol            k = clrToEol         *>              k ()      m
+  handle m Clear               k = clear            *>              k ()      m
+  handle m (AddStr str)        k = addStr   str     *>              k ()      m
+  handle m (AddNStr str n)     k = addNStr  str n   *>              k ()      m
+  handle m (AddCh c)           k = addCh    c       *>              k ()      m
 
   handle m (SetAttr attrs)             k =
-    setAttrAndColor attrs Nothing $> k () m
+    setAttrAndColor attrs Nothing *> k () m
   handle m (SetAttrAndColor attrs col) k =
-    setAttrAndColor attrs col     $> k () m
+    setAttrAndColor attrs col     *> k () m
 
 ||| The curses effect.
 CURSES : Type -> EFFECT
@@ -113,9 +110,7 @@ end = call Effect.Curses.End
 ||| successful. You can only use colors if you have called this function
 ||| and it returned `True`.
 startColor : { [CURSES $ Active False] ==>
-               [CURSES $ Active (if result
-                                   then True
-                                   else False)] } Eff Bool
+               {result} [CURSES $ Active result] } Eff Bool
 startColor = call StartColor
 
 ||| Moves the cursor to the previous position, if possible. Returns `True` if
