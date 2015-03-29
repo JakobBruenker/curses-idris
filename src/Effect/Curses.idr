@@ -5,31 +5,31 @@ import public UI.Curses
 
 %access abstract
 
-||| This is the resource for the `CURSES` effect before it has done
-||| anything.
-data Pre : Type where
-  MkPre : Pre
+||| This is used to specify whether colors can be used or not
+data HasColor = Color | NoColor
+
+||| This is the resource for the `CURSES` effect before it has done anything
+data Pre = MkPre
 
 ||| When the `CURSES` effect has this resource, the curses functions can be
 ||| called. Note that a `CURSES` effect should only be `run` if the type
 ||| signature does not contain the `Active` resource.
-data Active : (colorEnabled : Bool) -> Type where
-  MkActive : Active colorEnabled
+data Active : (hasColor : HasColor) -> Type where
+  MkActive : Active hasColor
 
 ||| This is the resource the `CURSES` effect has after curses has been
 ||| terminated
-data Post : Type where
-  MkPost : Post
+data Post = MkPost
 
 instance Default Pre where
   default = MkPre
 
 data Curses : Effect where
   
-  Start : GetChMode ->  { Pre      ==> Active False } Curses ()
-  End   :               { Active c ==> Post         } Curses ()
+  Start : GetChMode ->  { Pre      ==> Active NoColor } Curses ()
+  End   :               { Active c ==> Post           } Curses ()
 
-  StartColor :  { Active False ==> {success} Active $ success } Curses Bool
+  StartColor :  { Active NoColor ==> {result} Active result } Curses HasColor
 
   MovePrevCh    :                   { Active c } Curses Bool
   MoveNextCh    :                   { Active c } Curses Bool
@@ -51,9 +51,9 @@ data Curses : Effect where
   AddNStr       : String -> Nat ->  { Active c } Curses ()
   AddCh         : Char ->           { Active c } Curses ()
 
-  SetAttr         : List Attr -> { Active False } Curses ()
+  SetAttr         : List Attr -> { Active NoColor } Curses ()
   SetAttrAndColor : List Attr -> Maybe ColorPair ->
-                      { Active True } Curses ()
+                      { Active Color } Curses ()
 
 instance Handler Curses IO where
   handle _ (Start gcm) k = startCurses gcm  *> k () MkActive
@@ -61,7 +61,7 @@ instance Handler Curses IO where
 
   handle _ StartColor k = do success <- hasColors
                              startColor
-                             k success MkActive
+                             k (if success then Color else NoColor) MkActive
 
 
   handle m MovePrevCh k = movePrevCh >>= \success => k success m
@@ -98,7 +98,7 @@ CURSES res = MkEff res Curses
 ||| before the program terminates.
 ||| @getChMode the mode that getCh will use
 start : (getChMode : GetChMode) ->
-        { [CURSES Pre] ==> [CURSES $ Active False] } Eff ()
+        { [CURSES Pre] ==> [CURSES $ Active NoColor] } Eff ()
 start gcm = call $ Start gcm
 
 ||| Terminates curses. This should *always* be called before the program
@@ -108,9 +108,9 @@ end = call Effect.Curses.End
 
 ||| Tries to initialize colors. The return value specifies if this was
 ||| successful. You can only use colors if you have called this function
-||| and it returned `True`.
-startColor : { [CURSES $ Active False] ==>
-               {result} [CURSES $ Active result] } Eff Bool
+||| and it returned `Color`.
+startColor : { [CURSES $ Active NoColor] ==>
+               {result} [CURSES $ Active result] } Eff HasColor
 startColor = call StartColor
 
 ||| Moves the cursor to the previous position, if possible. Returns `True` if
@@ -223,7 +223,7 @@ addCh c = call $ AddCh c
 
 ||| Sets all given attributes.
 ||| @attrs  the attributes that will be set
-setAttr : (attrs : List Attr) -> { [CURSES $ Active False] } Eff ()
+setAttr : (attrs : List Attr) -> { [CURSES $ Active NoColor] } Eff ()
 setAttr attrs = call $ SetAttr attrs
 
 ||| Sets all given attributes and the specified colors.
@@ -235,5 +235,5 @@ setAttr attrs = call $ SetAttr attrs
 |||           then reinitialized with different colors, the characters that are
 |||           already on the screen will change their color
 setAttrAndColor : (attrs : List Attr) -> (colors : Maybe ColorPair) ->
-                    { [CURSES $ Active True] } Eff ()
+                    { [CURSES $ Active Color] } Eff ()
 setAttrAndColor attrs col = call $ SetAttrAndColor attrs col

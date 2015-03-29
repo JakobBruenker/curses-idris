@@ -10,7 +10,7 @@ test : { [CURSES Pre] ==> [CURSES Post] } Eff ()
 test = do start WaitForever
           addStr "Welcome to testE\nPress any key to continue"
           getCh
-          True <- startColor | False => noColor
+          Color <- startColor | NoColor => noColor
           setAttrAndColor [Bold, Underline] $ Just (MkColorPair 1 Red Blue)
           clear
           (lin, _) <- scrSize
@@ -21,11 +21,11 @@ test = do start WaitForever
           loop
           end
 
-   where noColor : { [CURSES $ Active False] ==> [CURSES Post] } Eff ()
+   where noColor : { [CURSES $ Active NoColor] ==> [CURSES Post] } Eff ()
          noColor = do addStr "\nYour terminal doesn't support color!"
                       addStr "\nThe program will terminate now!"
                       end
-         loop : { [CURSES $ Active True] } Eff ()
+         loop : { [CURSES $ Active Color] } Eff ()
          loop = do clear
                    addStr "Please write \"quit\" and press enter: "
                    when (!(getStr True False) /= "quit") loop
