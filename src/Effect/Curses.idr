@@ -26,10 +26,10 @@ instance Default Pre where
 
 data Curses : Effect where
   
-  Start : GetChMode ->  { Pre      ==> Active NoColor } Curses ()
-  End   :               { Active c ==> Post           } Curses ()
+  Start : GetChMode ->  sig Curses () Pre (Active NoColor)
+  End   :               sig Curses () (Active c) Post
 
-  StartColor :  { Active NoColor ==> {result} Active result } Curses HasColor
+  StartColor :  Curses HasColor (Active NoColor) (\result => Active result)
 
   MovePrevCh    :                   { Active c } Curses Bool
   MoveNextCh    :                   { Active c } Curses Bool
