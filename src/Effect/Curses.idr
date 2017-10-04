@@ -10,21 +10,25 @@ public export
 data HasColor = Color | NoColor
 
 ||| This is the resource for the `CURSES` effect before it has done anything
+public export
 data Pre = MkPre
 
 ||| When the `CURSES` effect has this resource, the curses functions can be
 ||| called. Note that a `CURSES` effect should only be `run` if the type
 ||| signature does not contain the `Active` resource.
+public export
 data Active : (hasColor : HasColor) -> Type where
   MkActive : Active hasColor
 
 ||| This is the resource the `CURSES` effect has after curses has been
 ||| terminated
+public export
 data Post = MkPost
 
 Default Pre where
   default = MkPre
 
+public export
 data Curses : Effect where
 
   Start : GetChMode ->  sig Curses () Pre (Active NoColor)
