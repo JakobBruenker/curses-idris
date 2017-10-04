@@ -1,9 +1,8 @@
-curses-idris
-============
+# curses-idris
 
 Curses bindings package for Idris
 
-#Installation
+## Installation
 
 To install, simply run
 
