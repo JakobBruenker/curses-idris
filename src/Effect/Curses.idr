@@ -3,9 +3,10 @@ module Effect.Curses
 import Effects
 import public UI.Curses
 
-%access abstract
+%access export
 
 ||| This is used to specify whether colors can be used or not
+public export
 data HasColor = Color | NoColor
 
 ||| This is the resource for the `CURSES` effect before it has done anything
@@ -21,11 +22,11 @@ data Active : (hasColor : HasColor) -> Type where
 ||| terminated
 data Post = MkPost
 
-instance Default Pre where
+Default Pre where
   default = MkPre
 
 data Curses : Effect where
-  
+
   Start : GetChMode ->  sig Curses () Pre (Active NoColor)
   End   :               sig Curses () (Active c) Post
 
@@ -55,7 +56,7 @@ data Curses : Effect where
   SetAttrAndColor : List Attr -> Maybe ColorPair ->
                       { Active Color } Curses ()
 
-instance Handler Curses IO where
+Handler Curses IO where
   handle _ (Start gcm) k = startCurses gcm  *> k () MkActive
   handle _ End         k = endWin           *> k () MkPost
 
@@ -168,7 +169,7 @@ getMaxYX = call GetMaxYX
 ||| @useEcho  if `True`, the user will see the `String` they enter
 ||| @setEcho  if `True`, echo will be on after the `String` has been returned,
 |||             otherwise, echo will be off
-getStr : (useEcho : Bool) -> (setEcho : Bool) -> 
+getStr : (useEcho : Bool) -> (setEcho : Bool) ->
          { [CURSES $ Active c] } Eff String
 getStr ue se = call $ GetStr ue se
 
@@ -210,7 +211,7 @@ addStr str = call $ AddStr str
 
 ||| Prints a `String` to the standard screen at current cursor position.
 ||| The cursor will be advanced after printing.
-||| @s        the string that will be printed 
+||| @s        the string that will be printed
 ||| @maxChars specifies the maximum number of characters that will be printed
 addNStr : (s : String) -> (maxChars : Nat) -> { [CURSES $ Active c] } Eff ()
 addNStr str k = call $ AddNStr str k

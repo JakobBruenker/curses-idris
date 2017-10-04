@@ -13,7 +13,7 @@ module UI.Curses
 data Window = MkWindow Ptr
 
 ||| The modes that `getCh` can use to get characters.
-public
+public export
 data GetChMode : Type where
   ||| `getCh` waits for the user to press a key, but doesn't affect interrupt
   ||| and control flow characters.
@@ -39,7 +39,7 @@ data GetChMode : Type where
 ||| These are the color that are defined once curses is initialized.
 |||
 ||| Note that some terminals may display some colors differently.
-public
+public export
 data Color = Black
            | Red
            | Green
@@ -50,7 +50,7 @@ data Color = Black
            | White
 
 ||| This is necessary to use colors.
-public
+public export
 data ColorPair : Type where
   ||| Use this constructor to make a ColorPair.
   ||| @i index of the ColorPair
@@ -62,7 +62,7 @@ data ColorPair : Type where
 ||| These are the attributes that can be used to print text in various ways.
 |||
 ||| Note that some terminals may not support all of these attributes.
-public
+public export
 data Attr : Type where
   ||| Prints text normally.
   Normal      : Attr
@@ -87,14 +87,14 @@ data Attr : Type where
 
 namespace Cursor
   ||| These are the available cursor states.
-  public
+  public export
   data CursorState = Invisible
                    | Normal
                    | VeryVisible
 
 ||| These are special characters, which can be converted into regular
 ||| Characters with the function `specialChar`.
-public
+public export
 data SpecialChar = Escape
                  | Backspace
                  | Up
@@ -123,10 +123,10 @@ data SpecialChar = Escape
                  | Enter
 
 ||| Converts a `SpecialChar` into a regular `Char`.
-public
+public export
 specialChar : SpecialChar -> Char
 specialChar Escape    = '\ESC'
-specialChar Backspace = '\263' 
+specialChar Backspace = '\263'
 specialChar Up        = '\259'
 specialChar Down      = '\258'
 specialChar Left      = '\260'
@@ -210,7 +210,7 @@ halfDelay delay = foreign FFI_C "halfdelay" (Int -> IO ()) delay
 ||| Enables or disables the reading of function keys, arrow keys, and so on.
 ||| This is turned on by default.
 ||| @bf  if `True`, enables reading, if `False`, disables it
-abstract
+export
 keypad : (bf : Bool) -> IO ()
 keypad bf = do
   (MkWindow scr) <- stdScr
@@ -233,7 +233,7 @@ nl False = foreign FFI_C "nonl" (IO ())
 ||| `echo` determines whether a character will be printed when the user presses
 ||| a key
 ||| @bf whether or not the echo will be on
-abstract
+export
 echo : (bf : Bool) -> IO ()
 echo False = foreign FFI_C "noecho" (IO ())
 echo True  = foreign FFI_C "echo"   (IO ())
@@ -249,20 +249,20 @@ raw False = foreign FFI_C "noraw" (IO ())
 ||| Return `True` if the terminal supports colors, false otherwise. This
 ||| function may not return correct results if `startCurses` has not been
 ||| called.
-abstract
+export
 hasColors : IO Bool
 hasColors = map idrBool $ foreign FFI_C "has_colors" (IO Int)
 
 ||| Refreshes the screen. It is unlikely that a program needs to manually
 ||| call this function.
-abstract
+export
 refresh : IO ()
 refresh = foreign FFI_C "refresh" (IO ())
 
 ||| This function must be called before colors can be used. Note that not all
 ||| terminals support colors. Use `hasColors` to find out whether the terminal
 ||| the program runs on supports colors.
-abstract
+export
 startColor : IO ()
 startColor = refresh *> foreign FFI_C "start_color" (IO ())
 
@@ -271,14 +271,14 @@ initScr = map MkWindow $ foreign FFI_C "initscr" (IO Ptr)
 
 ||| Terminates curses. This should *always* be called before the program
 ||| terminates.
-abstract
+export
 endWin : IO ()
 endWin = foreign FFI_C "endwin" (IO ())
 
 ||| Returns the size of the standard window.
 |||
 ||| The format is `(lines, columns)`.
-abstract
+export
 scrSize : IO (Int, Int)
 scrSize = [| MkPair (foreign FFI_C "getLines" (IO Int))
                     (foreign FFI_C "getCols"  (IO Int)) |]
@@ -286,7 +286,7 @@ scrSize = [| MkPair (foreign FFI_C "getLines" (IO Int))
 ||| Initializes a color pair.
 initPair : ColorPair -> IO ()
 initPair (MkColorPair natIndex colorFG colorBG) =
-  foreign FFI_C "init_pair" (Int -> Int -> Int -> IO ()) (i + 1) fg bg 
+  foreign FFI_C "init_pair" (Int -> Int -> Int -> IO ()) (i + 1) fg bg
   where
     i : Int
     i = toIntNat natIndex
@@ -302,26 +302,26 @@ setAttr a = foreign FFI_C "attrset" (Int -> IO ()) a
 ||| The cursor will be advanced after printing.
 ||| @s        the string that will be printed
 ||| @maxChars specifies the maximum number of characters that will be printed
-abstract
+export
 addNStr : (s : String) -> (maxChars : Nat) -> IO ()
 addNStr s n = foreign FFI_C "addnstr" (String -> Int -> IO ()) s (toIntNat n)
 
 ||| Prints a `String` to the standard screen at current cursor position.
 ||| The cursor will be advanced after printing.
 ||| @s the string that will be printed
-abstract
+export
 addStr : (s: String) -> IO ()
 addStr s = foreign FFI_C "addstr" (String -> IO ()) s
 
 ||| Prints a character to the standard screen at current cursor position.
 ||| The cursor will be advanced after printing.
 ||| @c the character that will be printed
-abstract
+export
 addCh : (c : Char) -> IO ()
 addCh c = foreign FFI_C "addch" (Char -> IO ()) c
 
 ||| Clears the screen to the end of the line.
-abstract
+export
 clrToEol : IO ()
 clrToEol = foreign FFI_C "clrtoeol" (IO ())
 
@@ -329,7 +329,7 @@ clrToEol = foreign FFI_C "clrtoeol" (IO ())
 ||| Returns `True` if the cursor was moved, `False` otherwise.
 ||| @y the line to which the cursor will move (counting starts at 0)
 ||| @x the column to which the cursor will move (counting starts at 0)
-abstract
+export
 move : (y : Int) -> (x : Int) -> IO Bool
 move y x = map errOkToBool $ foreign FFI_C "move" (Int -> Int -> IO Int) y x
 
@@ -339,15 +339,15 @@ curs_set x = foreign FFI_C "curs_set" (Int -> IO Int) x
 ||| Sets the cursor state. Returns `Nothing`, if the specified cursor state
 ||| cannot be set, and `Just` the previous cursor state otherwise.
 ||| @cs the cursor state that will be set
-abstract
+export
 cursSet : (cs : CursorState) -> IO $ Maybe CursorState
-cursSet Invisible = leaveOk True  *> curs_set 0 >>= return . intToCursorState
+cursSet Invisible = leaveOk True  *> curs_set 0 >>= pure . intToCursorState
 cursSet cs = leaveOk False *> curs_set (cursorStateToInt cs) >>=
-  return . intToCursorState
+  pure . intToCursorState
 
 ||| Returns the current cursor position.
 ||| The format is `(line, column)`.
-abstract
+export
 getYX : IO (Int, Int)
 getYX = do
   (MkWindow scr) <- stdScr
@@ -356,15 +356,15 @@ getYX = do
 
 ||| Returns the highest line and column the cursor can be at.
 ||| The format is `(line, column)`.
-abstract
+export
 getMaxYX : IO (Int, Int)
-getMaxYX = scrSize >>= \(row, col) => return (row - 1, col - 1)
+getMaxYX = scrSize >>= \(row, col) => pure (row - 1, col - 1)
 
 getch : IO Int
 getch = foreign FFI_C "getch" (IO Int)
 
 ||| Clears the screen.
-abstract
+export
 clear : IO ()
 clear = foreign FFI_C "clear" (IO ())
 
@@ -381,7 +381,7 @@ colorPair i = foreign FFI_C "COLOR_PAIR" (Int -> IO Int) (i + 1)
 |||           screen use the pair with index *i*, and the pair with index *i* is
 |||           then reinitialized with different colors, the characters that are
 |||           already on the screen will change their color
-abstract
+export
 setAttrAndColor : (attrs : List Attr) -> (colors : Maybe ColorPair) -> IO ()
 setAttrAndColor as c = do
     refresh
@@ -394,11 +394,11 @@ setAttrAndColor as c = do
     intIndex : ColorPair -> Int
     intIndex (MkColorPair i _ _) = toIntNat i
     colorAttr : IO Int
-    colorAttr = maybe (return 0) (colorPair . intIndex) c
+    colorAttr = maybe (pure 0) (colorPair . intIndex) c
 
 ||| Advances the cursor to the next position, if possible. Returns `True` if
 ||| cursor was moved, `False` otherwise.
-abstract
+export
 moveNextCh : IO Bool
 moveNextCh = do
   (maxY, maxX) <- getMaxYX
@@ -407,11 +407,11 @@ moveNextCh = do
     then if y >= maxY then (maxY, maxX, False) else (y + 1, 0, True)
     else (y, x + 1, True)
   move newY newX
-  return success
+  pure success
 
 ||| Moves the cursor to the previous position, if possible. Returns `True` if
 ||| cursor was moved, `False` otherwise.
-abstract
+export
 movePrevCh : IO Bool
 movePrevCh = do
   (maxY, maxX) <- getMaxYX
@@ -420,46 +420,46 @@ movePrevCh = do
     then if y <= 0 then (0, 0, False) else (y - 1, maxX, True)
     else (y, x - 1, True)
   move newY newX
-  return success
+  pure success
 
-||| Returns `Just` a character, or `Nothing` if the `GetChMode` is `Wait k` and 
+||| Returns `Just` a character, or `Nothing` if the `GetChMode` is `Wait k` and
 ||| the time runs out. See `GetChMode` for more information.
-abstract
+export
 getCh : IO $ Maybe Char
 getCh = do
   refresh
   c <- getch
-  return $ if c == (-1) then Nothing else return $ chr c 
+  pure $ if c == (-1) then Nothing else pure $ chr c
 
 ||| Returns a character once the user presses a key. This function is affected
 ||| by whether or not the `GetChMode` is a "raw" or a "linebuf" mode.
-abstract
+export
 forceCh : IO Char
 forceCh = do
   refresh
   c <- getch
-  if c == (-1) then forceCh else return $ chr c
+  if c == (-1) then forceCh else pure $ chr c
 
 ||| Returns a `String` the user enters. This function is affected by whether or
 ||| not the `GetChMode` is a "raw" mode.
 ||| @useEcho  if `True`, the user will see the `String` they enter
 ||| @setEcho  if `True`, echo will be on after the `String` has been returned,
 |||             otherwise, echo will be off
-abstract
+export
 getStr : (useEcho : Bool) -> (setEcho : Bool) -> IO String
 getStr useEcho setEcho = do
     echo useEcho
     (y, x) <- getYX
     str <- map reverse $ getRawStr y x ""
     echo setEcho
-    return str
+    pure str
   where
     mayMovePrev : IO Bool
-    mayMovePrev = if useEcho then movePrevCh else return False
+    mayMovePrev = if useEcho then movePrevCh else pure False
     mayMoveNext : IO Bool
-    mayMoveNext = if useEcho then moveNextCh else return False
+    mayMoveNext = if useEcho then moveNextCh else pure False
     mayMove : Int -> Int -> IO Bool
-    mayMove y x = if useEcho then move y x else return False
+    mayMove y x = if useEcho then move y x else pure False
     mayAddCh : Char -> IO ()
     mayAddCh c = when useEcho $ addCh c
     safeTail : List a -> List a
@@ -471,17 +471,17 @@ getStr useEcho setEcho = do
       c <- forceCh
       (y, x) <- getYX
       case c of
-        '\n'   => mayMove preY preX *> return str
+        '\n'   => mayMove preY preX *> pure str
         '\263' => if y <= initY && x < initX
           then mayMove preY preX *> getRawStr initY initX str
           else do if (preY, preX) == (y, x)
-                    then mayMovePrev *> mayAddCh ' ' *> mayMovePrev *> return ()
-                    else mayAddCh ' ' *> mayMove y x *> return ()
+                    then mayMovePrev *> mayAddCh ' ' *> mayMovePrev *> pure ()
+                    else mayAddCh ' ' *> mayMove y x *> pure ()
                   getRawStr initY initX . pack . safeTail . unpack $ str
         char => getRawStr initY initX $ strCons char str
 
 ||| Sets the mode `getCh` will operate in.
-abstract
+export
 setGetChMode : GetChMode -> IO ()
 setGetChMode WaitForever           = raw False *> cBreak True  *> noDelay False
 setGetChMode WaitForeverRaw        = raw True                  *> noDelay False
@@ -493,7 +493,7 @@ setGetChMode WaitForeverLinebufRaw = raw True  *> cBreak False *> noDelay False
 ||| Use this function to start curses. Note that `endWin` should *always* be
 ||| called before the program terminates.
 ||| @getChMode    the mode that `getCh` will use
-abstract
+export
 startCurses : (getChMode : GetChMode) -> IO ()
 startCurses getChMode = do
   initScr
